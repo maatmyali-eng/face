@@ -247,7 +247,10 @@ def _build_content_plan(
     client = get_gemini_client()
     ctx    = build_prompt_context()
 
-    reel_day   = _is_reel_day(cfg)
+    agents = cfg.get("agents", {})
+    enable_reels = agents.get("enable_reels", False) is True
+    enable_stories = agents.get("enable_stories", False) is True
+    reel_day = enable_reels and _is_reel_day(cfg)
     algo_formats = algo_rules.get("recommended_formats", [])
     preferred_pillars = perf_report.get("top_performing_pillars", [])
 
@@ -259,7 +262,7 @@ def _build_content_plan(
     used_topics: set[str]   = set()
     reel_assigned            = False
     story_count              = 0
-    max_stories              = 2   # derive story slots from top 2 posts
+    max_stories              = min(2, int(cfg.get("posting_schedule", {}).get("stories_per_day", 2))) if enable_stories else 0
 
     # Each posting_time_utc string is "HH:MM" or full ISO; parse hour
     for slot_idx, raw_time in enumerate(posting_times_utc):
@@ -319,12 +322,24 @@ def _build_content_plan(
             log.critical("Gemini quota exhausted during strategy planning — halting slot loop")
             break
 
+        # Only emit formats that have a verified publishing path. Carousel currently
+        # routes to a single photo in the publisher, so normalize it to single_image.
+        candidate_format = str(strategy.get("format", assigned_format)).strip().lower()
+        if candidate_format in {"carousel", "image_post", "image"}:
+            candidate_format = "single_image"
+        if candidate_format == "reel" and not enable_reels:
+            candidate_format = "single_image"
+        if candidate_format == "story" and not enable_stories:
+            candidate_format = "single_image"
+        if candidate_format not in {"single_image", "text", "reel", "story"}:
+            candidate_format = "single_image"
+
         post_id = str(uuid.uuid4())
         post_entry = {
             "post_id":            post_id,
             "slot":               slot_num,
             "scheduled_time_utc": strategy.get("optimal_post_time", scheduled_time_utc),
-            "format":             strategy.get("format", assigned_format),
+            "format":             candidate_format,
             "trend_topic":        trend["topic"],
             "content_pillar":     strategy.get("content_pillar", pillar),
             "hook_type":          strategy.get("hook_type", slot_profile["hook_types"][0]),
