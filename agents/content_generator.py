@@ -82,22 +82,24 @@ def _safety_check(client, text_to_check: str) -> dict:
     Returns dict: { safe: bool, violations: list, adjusted_text: str,
                     confidence: float }
     Raises GeminiQuotaExhaustedError on quota failure (re-raised).
-    Returns a default-safe response on any other error.
+    Blocks the item if the safety check fails or returns an invalid response.
     """
     prompt = SAFETY_PROMPT_TEMPLATE.format(content_text=text_to_check)
     try:
         GEMINI_LIMITER.acquire()
         result = client.generate_json_raw(prompt)
+        if not isinstance(result, dict) or not isinstance(result.get("safe"), bool):
+            raise ValueError("Safety checker returned an invalid response; expected boolean 'safe'")
         return result
     except GeminiQuotaExhaustedError:
         raise
     except Exception as exc:           # noqa: BLE001
-        log_exception(log, exc, "Safety check Gemini call failed — assuming safe")
+        log_exception(log, exc, "Safety check failed; blocking this item")
         return {
-            "safe": True,
-            "violations": [],
+            "safe": False,
+            "violations": [f"Safety check failed: {exc}"],
             "adjusted_text": text_to_check,
-            "confidence": 0.5,
+            "confidence": 0.0,
         }
 
 
