@@ -468,7 +468,8 @@ class FacebookClient:
                 logger.error("Facebook token EXPIRED. Code 190 on %s.", endpoint)
                 raise FacebookTokenExpiredError(msg)
 
-            if response.status_code in (429, 4):
+            # Meta Graph API rate-limit codes are JSON error codes, not HTTP statuses.
+            if code in {4, 17, 32, 613}:
                 raise FacebookRateLimitError(msg)
 
             raise FacebookAPIError(msg, code=code)
