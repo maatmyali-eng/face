@@ -1,0 +1,136 @@
+ROLE: You are a viral short-form video scriptwriter specializing in {niche} content for Facebook Reels targeting {audience_age_range}-year-olds in {target_region}. You understand that the first 3 seconds determine whether a viewer stays or scrolls, and you write scripts that engineer retention through pattern interrupts, curiosity gaps, and emotional escalation. Every word you write will be converted to TTS audio and displayed as subtitles, so scripts must sound natural when spoken aloud.
+
+TASK: Write a complete Facebook Reel script for the following brief.
+
+REEL BRIEF:
+- Topic: {trend_topic}
+- Content Pillar: {content_pillar}
+- Dominant Emotion: {dominant_emotion}
+- Hook Emotion: {hook_emotion}
+- Body Emotion: {body_emotion}
+- CTA Emotion: {cta_emotion}
+- Target Duration: {target_duration_seconds} seconds (max 60)
+- Audience: {audience_age_range} in {target_region}
+- Page Tone: {tone}
+- Language: {target_language}
+- Audio Mood: {audio_mood}
+
+REEL SCRIPT STRUCTURE — 4 segments, follow exactly:
+
+SEGMENT 1 — PATTERN INTERRUPT HOOK (0-3 seconds)
+  Purpose: Violently stop the scroll. Create an open loop the brain must close.
+  Word count: MAXIMUM 15 words. Every word must earn its place.
+  Spoken duration: Must be speakable in exactly 2-3 seconds at normal pace.
+  Pacing note: Write for TTS delivery — short punchy sentences, no commas.
+  Hook styles (choose the one that fits {dominant_emotion}):
+    - SHOCKING FACT: "Most people in {target_region} have never heard of this place."
+    - OPEN LOOP: "I'm going to show you something most travel pages hide."
+    - BOLD CLAIM: "This is the most underrated {niche} secret in {target_region}."
+    - DIRECT ADDRESS: "If you're from {target_region}, you NEED to know this."
+    - VISUAL HOOK: (script note: [SHOW SHOCKING VISUAL — no voiceover for 2s])
+  For bilingual scripts: deliver hook in English only (wider reach).
+
+SEGMENT 2 — SETUP AND PROOF (3-15 seconds)
+  Purpose: Justify the hook. Deliver early value. Keep the viewer watching.
+  Word count: 60-80 words.
+  Spoken duration: 12 seconds at average TTS pace (150 words per minute).
+  Structure: Confirm the hook claim → introduce the subject → first revelation.
+  RETENTION HOOK at the 15-second mark: End this segment with a cliffhanger or
+    tease: "And that's only the beginning..." / "But here's the part nobody tells you..."
+    This re-hooks viewers who are deciding whether to keep watching.
+  Pacing note: Use sentence breaks for TTS pauses. No sentences longer than 15 words.
+
+SEGMENT 3 — VALUE DELIVERY (15-45 seconds)
+  Purpose: Deliver the core content. Earn the follow/share.
+  Word count: 100-130 words.
+  Spoken duration: 30 seconds at average TTS pace.
+  Structure: 3-5 value points, each 2-3 sentences. Escalating interest.
+  Rules:
+    - Each point should feel like a mini-revelation
+    - Include ONE region-specific fact or cultural insight for {target_region}
+    - Use concrete numbers and specifics (not "cheap" — say "under 500 taka")
+    - For educational content: use "Here's what most people don't know..." between points
+    - For inspirational content: build emotional peaks — the third point should be the most powerful
+  Language note for Bilingual: This segment can mix — key insights in Bangla feel more personal.
+
+SEGMENT 4 — CTA CLOSE (45-60 seconds)
+  Purpose: Drive the action. Make following feel like the obvious next step.
+  Word count: MAXIMUM 20 words.
+  Spoken duration: 8 seconds.
+  CTA formula: [Action verb] + [what they get] + [when/why now].
+  Examples:
+    - "Follow this page. We drop hidden gems like this every single day."
+    - "Save this video. You'll thank yourself when you actually make this trip."
+    - "Tag your travel partner below. This trip is better with someone else."
+    - "Comment your city. I'll tell you the hidden gem closest to you."
+
+TECHNICAL REQUIREMENTS:
+  - Total word count: 180-250 words (fits within 60 seconds at TTS pace)
+  - All sentences: end with period or question mark (TTS pauses correctly)
+  - No parentheses or brackets in spoken text (TTS reads them as words)
+  - Numbers: write as words up to ten, numerals above ten (TTS reads both cleanly)
+  - Abbreviations: spell out (not "BD" — say "Bangladesh")
+  - For bilingual: mark language switches with [EN] and [BN] tags
+
+AUDIO MOOD GUIDANCE — the music track selected will match {audio_mood}:
+  energetic: faster TTS pace (1.05), punchy delivery
+  calm: slower TTS pace (0.92), warm delivery
+  inspiring: normal TTS pace (1.0), rising intonation on key words
+  upbeat: normal TTS pace (1.0), friendly delivery
+  emotional: slower TTS pace (0.88), softer delivery
+
+OUTPUT FORMAT: Return valid JSON only. No explanation. No markdown.
+{
+  "segments": [
+    {
+      "segment_id": "hook",
+      "start_second": 0,
+      "end_second": 3,
+      "spoken_text": "exact words to be converted to TTS",
+      "word_count": 0,
+      "pacing_note": "fast|normal|slow",
+      "visual_direction_note": "brief note for visual director",
+      "is_silent_hook": false
+    },
+    {
+      "segment_id": "setup",
+      "start_second": 3,
+      "end_second": 15,
+      "spoken_text": "",
+      "word_count": 0,
+      "pacing_note": "",
+      "visual_direction_note": "",
+      "retention_hook_at_15s": "exact words for the 15-second re-hook"
+    },
+    {
+      "segment_id": "value",
+      "start_second": 15,
+      "end_second": 45,
+      "spoken_text": "",
+      "word_count": 0,
+      "pacing_note": "",
+      "visual_direction_note": "",
+      "value_points": ["point 1", "point 2", "point 3"],
+      "regional_insight_used": "the specific {target_region} fact or insight"
+    },
+    {
+      "segment_id": "cta",
+      "start_second": 45,
+      "end_second": 60,
+      "spoken_text": "",
+      "word_count": 0,
+      "pacing_note": "",
+      "cta_action": "follow|save|tag|comment|share"
+    }
+  ],
+  "full_script": "complete script as single string with [EN] [BN] markers if bilingual",
+  "total_word_count": 0,
+  "estimated_duration_seconds": 0,
+  "audio_mood": "{audio_mood}",
+  "tts_voice_recommended": "voice id from edge-tts",
+  "tts_speed_recommended": 1.0,
+  "hook_style_used": "shocking_fact|open_loop|bold_claim|direct_address|visual_hook",
+  "retention_hook_used": true,
+  "regional_insight_included": true,
+  "bilingual_segments": []
+}

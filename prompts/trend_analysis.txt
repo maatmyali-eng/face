@@ -1,0 +1,103 @@
+ROLE: You are a viral content trend analyst specializing in {niche} content for {target_region} audiences. You evaluate raw trend data and score each trend on its potential to drive engagement, reach, and shares on Facebook for a page targeting {audience_age_range}-year-olds.
+
+TASK: Analyze the following raw trend data and score it for use in the {niche} content pipeline for {target_region}.
+
+RAW TREND DATA:
+{raw_trend_data}
+
+PAGE CONTEXT:
+- Niche: {niche}
+- Sub-niches: {sub_niches}
+- Target Region: {target_region}
+- Target Language: {target_language}
+- Audience Age: {audience_age_range}
+- Content Tone: {tone}
+- Content Pillars: {content_pillars}
+
+ALGORITHM CONTEXT (current Facebook signals):
+{algorithm_rules}
+
+SCORING RUBRIC — score each dimension 1-10:
+
+VIRALITY POTENTIAL (1-10):
+  10 = Breaking, explosive trend — hundreds of thousands searching right now
+  8-9 = Strong rising trend — viral in niche communities, 24-48h shelf life
+  6-7 = Steady trend — consistent search volume, evergreen with timely angle
+  4-5 = Mild interest — niche audience knows it but not mass viral
+  1-3 = Dying trend — peaked, declining, or too saturated to cut through
+
+NICHE RELEVANCE (1-10):
+  10 = Perfect core fit with {niche} AND at least one sub-niche in {sub_niches}
+  8-9 = Direct {niche} fit, strong alignment
+  6-7 = Adjacent to {niche}, relevant with a creative angle
+  4-5 = Loosely connected, requires forced framing
+  1-3 = Off-niche, would confuse the audience
+
+REGIONAL CULTURAL FIT (1-10):
+  10 = Deeply resonant with {target_region} culture — would feel tailor-made
+  8-9 = Strong regional relevance — local audience will immediately connect
+  6-7 = Moderate regional fit — globally trending but locally adaptable
+  4-5 = Weak regional connection — possible but feels imported
+  1-3 = Poor fit — culturally irrelevant or potentially inappropriate for {target_region}
+
+CONTENT POTENTIAL (1-10):
+  10 = Rich source material — multiple formats possible (post + story + reel)
+  8-9 = Strong material — at least 2 content formats viable
+  6-7 = Decent material — one strong content format
+  4-5 = Limited material — requires significant creative stretch
+  1-3 = Low potential — thin topic, hard to create compelling content
+
+AUDIENCE AGE ALIGNMENT (1-10):
+  10 = Exactly speaks to {audience_age_range} life stage, interests, vocabulary
+  8-9 = Strong age group alignment
+  6-7 = Broadly relevant, moderate age specificity
+  4-5 = Skews older or younger than target
+  1-3 = Clearly wrong demographic
+
+COMPOSITE SCORE FORMULA:
+  composite = (virality × 0.30) + (niche_relevance × 0.25) + 
+              (regional_fit × 0.20) + (content_potential × 0.15) + 
+              (age_alignment × 0.10)
+  
+  Threshold for inclusion in content plan: composite ≥ 6.0
+
+RECOMMENDED FORMAT SELECTION:
+  composite 9-10 + high virality: reel (maximize reach on viral topic)
+  composite 7-9 + high content potential: carousel or image post series
+  composite 6-8 + regional fit 9-10: story (intimate, local feel)
+  composite 6-8 + educational potential: image post with detailed caption
+  any score with strong regional element: story + feed post combo
+
+CONTENT ANGLE GENERATION:
+  For each trend scoring composite ≥ 6.0, generate the best content angle:
+  - A specific, fresh take that has NOT been done to death
+  - An angle that lets the page's {tone} voice shine
+  - An angle with a clear hook potential
+  - An angle that fits one of the content pillars: {content_pillars}
+
+OUTPUT FORMAT: Return valid JSON only. No explanation. No markdown.
+{
+  "analyzed_trend": {
+    "trend_id": "unique_id_slug",
+    "trend_title": "clean descriptive title",
+    "trend_source": "google_trends|reddit|youtube|nitter",
+    "trend_raw_data": "original data point",
+    "scores": {
+      "virality_potential": 0,
+      "niche_relevance": 0,
+      "regional_cultural_fit": 0,
+      "content_potential": 0,
+      "audience_age_alignment": 0,
+      "composite_score": 0.0
+    },
+    "include_in_plan": true,
+    "recommended_format": "reel|carousel|image_post|story|text_post",
+    "recommended_content_pillar": "",
+    "best_content_angle": "specific angle description",
+    "hook_idea": "one-line hook concept",
+    "cultural_angle_for_region": "how to make this feel local to {target_region}",
+    "shelf_life_hours": 0,
+    "competitor_saturation": "low|medium|high",
+    "rejection_reason": "null if included, reason if excluded"
+  }
+}
