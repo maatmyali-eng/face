@@ -421,7 +421,7 @@ def _build_evergreen_fallback(cfg: dict) -> list[dict]:
             f"Hidden-gem destinations and local experiences in {region}",
             f"Travel-planning mistakes to avoid when visiting {region}",
             f"Practical tips for first-time travelers in {region}",
-            f"How to plan a memorable trip in {region on a realistic budget".replace("{region ", "{region "),
+            f"How to plan a memorable trip in {region} on a realistic budget",
         ]
     else:
         topics = [
