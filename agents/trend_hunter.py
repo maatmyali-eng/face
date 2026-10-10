@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import html
 import json
+import os
 import re
 import time
 import uuid
@@ -162,14 +163,13 @@ def _get_subreddits(cfg: dict) -> list[str]:
 
 def fetch_google_trends(country_code: str) -> list[dict]:
     """
-    Fetch daily trending searches from Google Trends RSS for the given country.
+    Fetch current Google Trends RSS topics for the configured country.
 
-    Returns a list of raw trend dicts with keys: topic, source, raw_score.
+    Google retired the old /trends/trendingsearches/daily/rss endpoint. The
+    current /trending/rss feed uses its own XML namespace and K/M traffic
+    suffixes, which must be parsed explicitly.
     """
-    url = (
-        f"https://trends.google.com/trends/trendingsearches/daily/rss"
-        f"?geo={country_code}"
-    )
+    url = f"https://trends.google.com/trending/rss?geo={country_code}"
     log.info("Google Trends: fetching %s", url)
     try:
         resp = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
@@ -178,38 +178,62 @@ def fetch_google_trends(country_code: str) -> list[dict]:
         log_exception(log, exc, "Google Trends fetch failed")
         return []
 
+    def parse_traffic(value: str) -> int:
+        match = re.search(r"([0-9][0-9,.]*)\s*([KMB]?)", str(value or "0"), re.IGNORECASE)
+        if not match:
+            return 0
+        try:
+            number = float(match.group(1).replace(",", ""))
+        except ValueError:
+            return 0
+        multiplier = {"": 1, "K": 1_000, "M": 1_000_000, "B": 1_000_000_000}
+        return int(number * multiplier.get(match.group(2).upper(), 1))
+
     trends: list[dict] = []
     try:
         root = ET.fromstring(resp.content)
-        ns = {"ht": "https://trends.google.com/trends/trendingsearches/daily"}
+        ns = {"ht": "https://trends.google.com/trending/rss"}
         channel = root.find("channel")
         if channel is None:
+            log.warning("Google Trends RSS response has no channel element")
             return []
+
         for item in channel.findall("item"):
             title_el = item.find("title")
-            traffic_el = item.find("ht:approx_traffic", ns)
             title = _clean_text(title_el.text if title_el is not None else "")
             if not title:
                 continue
-            # traffic looks like "200,000+" — strip non-digits
-            traffic_str = (traffic_el.text or "0") if traffic_el is not None else "0"
-            traffic = int(re.sub(r"[^\d]", "", traffic_str) or "0")
-            # related queries
-            related: list[str] = []
-            for rq in item.findall("ht:related_queries/ht:related_query", ns):
-                t = rq.find("ht:query", ns)
-                if t is not None and t.text:
-                    related.append(t.text.strip())
+
+            traffic_str = item.findtext("ht:approx_traffic", default="0", namespaces=ns)
+            traffic = parse_traffic(traffic_str)
+            published = item.findtext("pubDate", default="", namespaces=ns)
+
+            news_items: list[dict[str, str]] = []
+            for news in item.findall("ht:news_item", ns):
+                news_title = news.findtext("ht:news_item_title", default="", namespaces=ns).strip()
+                news_url = news.findtext("ht:news_item_url", default="", namespaces=ns).strip()
+                news_source = news.findtext("ht:news_item_source", default="", namespaces=ns).strip()
+                news_snippet = news.findtext("ht:news_item_snippet", default="", namespaces=ns).strip()
+                if news_title:
+                    news_items.append({
+                        "title": news_title[:240],
+                        "url": news_url,
+                        "source": news_source[:120],
+                        "snippet": news_snippet[:400],
+                    })
+
             trends.append({
                 "topic": title,
                 "source": "google_trends",
-                "raw_score": min(traffic / 100_000, 10.0),   # normalise to 0-10
+                "raw_score": min(traffic / 100_000, 10.0),
                 "raw_data": {
                     "approx_traffic": traffic,
-                    "related_queries": related[:5],
+                    "approx_traffic_display": traffic_str,
+                    "published_at": published,
+                    "news_items": news_items[:3],
                 },
             })
-        log.info("Google Trends: collected %d items", len(trends))
+        log.info("Google Trends: collected %d current items", len(trends))
     except ET.ParseError as exc:
         log_exception(log, exc, "Google Trends XML parse error")
     return trends
@@ -220,50 +244,15 @@ def fetch_google_trends(country_code: str) -> list[dict]:
 
 def fetch_reddit(subreddits: list[str]) -> list[dict]:
     """
-    Fetch hot posts from a list of subreddits using the public Reddit JSON API.
-
-    Returns a list of raw trend dicts.
+    Reddit retired unauthenticated public .json API access. Do not repeatedly
+    call the known-blocked endpoint; add an official OAuth adapter before
+    enabling this source again.
     """
-    trends: list[dict] = []
-    for sub in subreddits:
-        url = f"https://www.reddit.com/r/{sub}/hot.json?limit={MAX_REDDIT_POSTS}"
-        log.info("Reddit: fetching r/%s", sub)
-        try:
-            resp = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
-            if resp.status_code == 429:
-                log.warning("Reddit: rate-limited on r/%s, sleeping 2s", sub)
-                time.sleep(2)
-                resp = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
-            resp.raise_for_status()
-            data = resp.json()
-        except (requests.RequestException, json.JSONDecodeError) as exc:
-            log_exception(log, exc, f"Reddit fetch failed for r/{sub}")
-            continue
-
-        posts = data.get("data", {}).get("children", [])
-        for post in posts:
-            pd = post.get("data", {})
-            title = _clean_text(pd.get("title", ""))
-            score = pd.get("score", 0)
-            comments = pd.get("num_comments", 0)
-            if not title or score < 100:
-                continue
-            # Normalise Reddit score (upvotes) → 0-10
-            raw_score = min(score / 5000, 10.0)
-            trends.append({
-                "topic": title,
-                "source": "reddit",
-                "raw_score": raw_score,
-                "raw_data": {
-                    "subreddit": sub,
-                    "score": score,
-                    "num_comments": comments,
-                    "url": pd.get("url", ""),
-                },
-            })
-        time.sleep(0.5)   # be polite to Reddit
-    log.info("Reddit: collected %d items total", len(trends))
-    return trends
+    log.info(
+        "Reddit source skipped: public .json access requires authenticated OAuth; "
+        "Google Trends and fallback topics remain available."
+    )
+    return []
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Source 3 — YouTube Trending RSS
@@ -271,51 +260,58 @@ def fetch_reddit(subreddits: list[str]) -> list[dict]:
 
 def fetch_youtube_trending(country_code: str) -> list[dict]:
     """
-    Fetch trending YouTube videos via the public Atom feed.
+    Fetch YouTube's current mostPopular category-chart videos using Data API v3.
 
-    Returns a list of raw trend dicts.
+    YouTube retired its old trending feed/page. Data API's mostPopular chart
+    now represents Music, Movies, and Gaming charts; an API key is required.
     """
-    url = (
-        f"https://www.youtube.com/feeds/videos.xml"
-        f"?chart=trending&regionCode={country_code}&hl=en"
-    )
-    log.info("YouTube Trending: fetching %s", url)
+    api_key = os.environ.get("YOUTUBE_API_KEY", "").strip()
+    if not api_key:
+        log.info("YouTube chart source skipped: YOUTUBE_API_KEY is not configured.")
+        return []
+
+    url = "https://www.googleapis.com/youtube/v3/videos"
+    params = {
+        "part": "snippet,statistics",
+        "chart": "mostPopular",
+        "regionCode": country_code,
+        "maxResults": min(MAX_REDDIT_POSTS, 50),
+        "key": api_key,
+    }
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+        resp = requests.get(url, params=params, headers=HEADERS, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
-    except requests.RequestException as exc:
-        log_exception(log, exc, "YouTube Trending fetch failed")
+        payload = resp.json()
+    except (requests.RequestException, json.JSONDecodeError, ValueError) as exc:
+        log_exception(log, exc, "YouTube Data API request failed")
         return []
 
     trends: list[dict] = []
-    try:
-        ns = {
-            "atom":  "http://www.w3.org/2005/Atom",
-            "media": "http://search.yahoo.com/mrss/",
-            "yt":    "http://www.youtube.com/xml/schemas/2015",
-        }
-        root = ET.fromstring(resp.content)
-        for entry in root.findall("atom:entry", ns):
-            title_el = entry.find("atom:title", ns)
-            published_el = entry.find("atom:published", ns)
-            summary_el = entry.find("media:group/media:description", ns)
-            title = _clean_text(title_el.text if title_el is not None else "")
-            published = (published_el.text or "") if published_el is not None else ""
-            summary = _clean_text(summary_el.text if summary_el is not None else "")
-            if not title:
-                continue
-            trends.append({
-                "topic": title,
-                "source": "youtube",
-                "raw_score": 7.0,   # YouTube trending is already curated — flat score
-                "raw_data": {
-                    "published": published,
-                    "summary": summary[:200],
-                },
-            })
-        log.info("YouTube Trending: collected %d items", len(trends))
-    except ET.ParseError as exc:
-        log_exception(log, exc, "YouTube Trending XML parse error")
+    for video in payload.get("items", []):
+        snippet = video.get("snippet") or {}
+        stats = video.get("statistics") or {}
+        title = _clean_text(snippet.get("title", ""))
+        video_id = str(video.get("id", "")).strip()
+        if not title or not video_id:
+            continue
+        try:
+            views = int(stats.get("viewCount", 0) or 0)
+        except (TypeError, ValueError):
+            views = 0
+        trends.append({
+            "topic": title,
+            "source": "youtube_most_popular",
+            "raw_score": min(views / 1_000_000, 10.0),
+            "raw_data": {
+                "view_count": views,
+                "channel_title": str(snippet.get("channelTitle", ""))[:160],
+                "published_at": str(snippet.get("publishedAt", "")),
+                "url": f"https://www.youtube.com/watch?v={video_id}",
+                "chart_scope": "YouTube Music, Movies, and Gaming charts; not a general Trending page",
+            },
+        })
+
+    log.info("YouTube Data API returned %d chart items", len(trends))
     return trends
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -324,11 +320,12 @@ def fetch_youtube_trending(country_code: str) -> list[dict]:
 
 def fetch_nitter(niche: str) -> list[dict]:
     """
-    Fetch trending tweets related to the niche via public Nitter RSS instances.
-    Tries each instance in order and returns on first success.
-
-    Returns a list of raw trend dicts.
+    Optionally fetch niche-specific posts through a public Nitter RSS instance.
+    Nitter is unreliable; keep it disabled unless explicitly opted in.
     """
+    if os.environ.get("ENABLE_NITTER_SOURCE", "").strip().lower() != "true":
+        log.info("Nitter source skipped by default; set ENABLE_NITTER_SOURCE=true to opt in.")
+        return []
     query = quote_plus(f"{niche} trending")
     trends: list[dict] = []
     for base in NITTER_INSTANCES:
@@ -437,7 +434,7 @@ def _build_evergreen_fallback(cfg: dict) -> list[dict]:
         {
             "topic": topic,
             "source": "evergreen_fallback",
-            "raw_score": 3.0,
+            "raw_score": 0.0,
             "raw_data": {
                 "fallback": True,
                 "not_a_live_trend": True,
@@ -529,13 +526,19 @@ def main() -> None:
     raw_trends = _fetch_all_sources_parallel(cfg)
     log.info("Total raw items collected: %d", len(raw_trends))
 
+    evergreen_backups = _build_evergreen_fallback(cfg)
     if not raw_trends:
         log.warning(
-            "All public trend sources failed; using clearly labelled evergreen topics "
-            "instead of pretending we have live trend data."
+            "All live sources failed; using clearly labelled evergreen ideas "
+            "instead of pretending we have current trend data."
         )
-        raw_trends = _build_evergreen_fallback(cfg)
-        log.info("Built %d evergreen fallback topics", len(raw_trends))
+        raw_trends = evergreen_backups
+    elif len(raw_trends) < 25:
+        # Let niche-relevant evergreen ideas compete with general country trends;
+        # raw_score=0 keeps live evidence ahead when enough live items exist.
+        raw_trends.extend(evergreen_backups)
+        log.info("Added %d low-priority evergreen backup candidates", len(evergreen_backups))
+    log.info("Total candidates after fallback: %d", len(raw_trends))
 
     # ── Step 2: Deduplicate ─────────────────────────────────────────────────
     log.info("Step 2/4 — Deduplicating %d items", len(raw_trends))
