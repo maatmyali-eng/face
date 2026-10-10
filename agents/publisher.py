@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import os
 import sys
-import time
 import json
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -32,9 +31,7 @@ from utils.rate_limiter import FACEBOOK_LIMITER
 log = get_logger("publisher")
 
 # ── Constants ────────────────────────────────────────────────────────────────
-SCHEDULE_WINDOW_MINUTES = 10          # publish if within ±10 min of scheduled time
-RETRY_MAX_ATTEMPTS = 3
-RETRY_BASE_DELAY = 5                  # seconds
+SCHEDULE_WINDOW_MINUTES = 120        # allow for research/generation time before publishing
 MAX_REEL_SIZE_MB = 100
 STATE_GENERATED = "state/generated_content.json"
 STATE_CONTENT_PLAN = "state/content_plan.json"
@@ -54,13 +51,13 @@ def _now_utc() -> datetime:
 
 
 def _is_within_window(scheduled_iso: str, window_minutes: int = SCHEDULE_WINDOW_MINUTES) -> bool:
-    """Return True if the current UTC time is within ±window_minutes of scheduled_iso."""
+    """Return True when scheduled time is no more than window_minutes early or late."""
     try:
         scheduled = datetime.fromisoformat(scheduled_iso)
         if scheduled.tzinfo is None:
             scheduled = scheduled.replace(tzinfo=timezone.utc)
-        delta = abs((_now_utc() - scheduled).total_seconds())
-        return delta <= window_minutes * 60
+        delta = (_now_utc() - scheduled).total_seconds()
+        return -window_minutes * 60 <= delta <= window_minutes * 60
     except Exception as exc:
         log.warning(f"Could not parse scheduled_time '{scheduled_iso}': {exc}")
         return False
@@ -230,27 +227,26 @@ def _dispatch_publish(fb: FacebookClient, item: dict) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _publish_with_retry(fb: FacebookClient, item: dict) -> str:
-    """Attempt to publish item up to RETRY_MAX_ATTEMPTS times. Returns FB post_id."""
-    last_exc: Exception = RuntimeError("No attempts made")
-    for attempt in range(1, RETRY_MAX_ATTEMPTS + 1):
-        try:
-            fb_post_id = _dispatch_publish(fb, item)
-            log.info(
-                f"[{item['post_id']}] Published (attempt {attempt}/{RETRY_MAX_ATTEMPTS}) "
-                f"→ fb_post_id={fb_post_id}"
-            )
-            return fb_post_id
-        except FacebookTokenExpiredError:
-            raise  # bubble up immediately — no retry
-        except Exception as exc:
-            last_exc = exc
-            delay = RETRY_BASE_DELAY * (2 ** (attempt - 1))
-            log.warning(
-                f"[{item['post_id']}] Publish attempt {attempt} failed: {exc}. "
-                f"Retrying in {delay}s…"
-            )
-            time.sleep(delay)
-    raise last_exc
+    """Publish once. The Facebook client retries explicit rate limits; do not retry ambiguous POST failures."""
+    try:
+        fb_post_id = _dispatch_publish(fb, item)
+    except FacebookTokenExpiredError:
+        raise
+    except Exception as exc:
+        log.error(
+            "[%s] Publish request failed; not retrying automatically to avoid duplicate posts: %s",
+            item.get("post_id", "unknown"),
+            exc,
+        )
+        raise
+
+    if not fb_post_id:
+        raise RuntimeError(
+            "Facebook returned no post ID. The publish outcome may be ambiguous; "
+            "not retrying automatically to avoid a duplicate."
+        )
+    log.info("[%s] Published → fb_post_id=%s", item.get("post_id", "unknown"), fb_post_id)
+    return fb_post_id
 
 
 def run_publishing_loop(
@@ -266,31 +262,47 @@ def run_publishing_loop(
     published, failed, skipped = [], [], []
     now = _now_utc()
 
+    publish_now = os.getenv("PUBLISH_NOW", "").strip().lower() == "true"
+    publish_now_selected = False
+
     for item in content:
         pid = item.get("post_id", "")
         fmt = item.get("format", "unknown")
         topic = item.get("trend_topic", "")
         status = item.get("status", "")
 
-        # Only process "ready" items
+        # Only process ready items.
         if status != "ready":
             log.debug(f"[{pid}] status='{status}' — skipping")
             continue
 
         plan_entry = schedule_map.get(pid, {})
         scheduled_time = plan_entry.get("scheduled_time_utc", "")
+        force_publish_now = False
 
-        if not scheduled_time:
-            log.warning(f"[{pid}] No scheduled_time_utc in content_plan — skipping")
-            _write_skipped(pid, fmt, topic, "no_scheduled_time")
-            skipped.append({"post_id": pid, "format": fmt, "status": "skipped", "reason": "no_scheduled_time"})
-            continue
+        if publish_now:
+            if publish_now_selected:
+                log.debug(f"[{pid}] immediate publish already attempted once — skipping")
+                continue
+            # A manual/deployment run should publish one ready feed item now, not
+            # attempt to publish every item whose planned time has already passed.
+            publish_now_selected = True
+            force_publish_now = True
+        else:
+            if not scheduled_time:
+                log.warning(f"[{pid}] No scheduled_time_utc in content_plan — skipping")
+                _write_skipped(pid, fmt, topic, "no_scheduled_time")
+                skipped.append({"post_id": pid, "format": fmt, "status": "skipped", "reason": "no_scheduled_time"})
+                continue
 
-        if not _is_within_window(scheduled_time):
-            log.debug(f"[{pid}] Not in publish window (scheduled={scheduled_time}) — skipping this run")
-            continue
+            if not _is_within_window(scheduled_time):
+                log.debug(f"[{pid}] Not in publish window (scheduled={scheduled_time}) — skipping this run")
+                continue
 
-        log.info(f"[{pid}] In publish window — attempting {fmt} post…")
+        if force_publish_now:
+            log.info(f"[{pid}] PUBLISH_NOW enabled — attempting one immediate {fmt} post…")
+        else:
+            log.info(f"[{pid}] In publish window — attempting {fmt} post…")
 
         try:
             fb_post_id = _publish_with_retry(fb, item)
