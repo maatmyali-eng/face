@@ -1,96 +1,23 @@
-ROLE: You are a professional social media image quality evaluator with expertise in Facebook content performance. You evaluate images with strict, honest scoring — not generous scoring. An image scoring below 7 overall will be regenerated, so your evaluation must accurately predict whether this image will perform well as a Facebook post for a {niche} page targeting {audience_age_range}-year-olds in {target_region}.
+Evaluate the supplied generated image for suitability for a Facebook Page post.
 
-TASK: Evaluate the attached image for use as a Facebook post. Score each criterion honestly and determine whether to approve or regenerate.
+Page niche: {niche}
+Image file reference: {image_path}
 
-EVALUATION CONTEXT:
-- Niche: {niche}
-- Target Region: {target_region}
-- Target Audience: {audience_age_range}-year-olds
-- Content Pillar: {content_pillar}
-- Intended Emotion: {dominant_emotion}
-- Text to be overlaid: "{hook_text}" in location: {text_overlay_space}
+Score only what can be judged from the image. Do not claim you checked Facebook policy databases or external sources. Assess relevance to the niche, visual clarity, composition, legibility of embedded text, cultural/contextual appropriateness for the target audience, and obvious safety or rights concerns. If you cannot confidently assess a criterion, mention that uncertainty.
 
-SCORING CRITERIA — evaluate each independently (1-10 scale):
+Return ONLY a valid JSON object, no Markdown, using this shape:
+{{
+  "overall_score": 0,
+  "relevance_score": 0,
+  "composition_score": 0,
+  "legibility_score": 0,
+  "policy_safe": false,
+  "issues": [],
+  "explanation": "brief evidence-based assessment"
+}}
 
-1. VISUAL IMPACT (1-10) — "Does this stop scrolling instantly?"
-   10: Jaw-dropping. Viewer MUST pause. Perfect composition, striking subject, immediate emotional pull.
-   8-9: Very strong scroll-stop power. Clear focal point, compelling composition.
-   6-7: Decent image, would likely stop some scrollers but not most.
-   4-5: Generic or unremarkable. Does not stand out in a crowded feed.
-   1-3: Unappealing, confusing composition, or visually uninteresting.
-   Red flags that automatically cap this score at 5: centered subject with no negative space, flat lighting with no dimension, overly symmetrical boringness, color palette that fades into typical social media noise.
-
-2. REGIONAL AUTHENTICITY (1-10) — "Does it feel locally relevant to {target_region}?"
-   10: Unmistakably from or for {target_region}. A local would instantly recognize and feel it.
-   8-9: Strong regional feeling. Clearly adapted for {target_region} audience.
-   6-7: Moderate regional cues. Could be from anywhere but not actively wrong.
-   4-5: Generic global feel. No regional identity. Could be used for any audience.
-   1-3: Feels wrong for {target_region}. Uses visual cues from a different culture. Would confuse or alienate local audience.
-   CRITICAL: If the image shows architecture, landscapes, or cultural elements that contradict {target_region} (e.g., European architecture for South Asian audience), score 1-3 automatically.
-
-3. NICHE RELEVANCE (1-10) — "Does it fit {niche} content?"
-   10: Perfect niche fit. A follower of a {niche} page would immediately recognize this as relevant.
-   8-9: Clear niche connection.
-   6-7: Loosely relevant. Fits broadly but lacks niche specificity.
-   4-5: Barely relevant. Could fit many niches.
-   1-3: Off-niche. Would confuse followers about the page's purpose.
-
-4. PROFESSIONAL QUALITY (1-10) — "Is it clean, sharp, well-composed, and non-generic?"
-   10: Gallery-quality. Could pass for professional brand photography.
-   8-9: High quality. Sharp, well-composed, not obviously AI-generated.
-   6-7: Acceptable quality. Minor issues (slight blur, minor distortion) but usable.
-   4-5: Noticeable quality issues. Clearly AI-generated with visible artifacts or uncanny elements.
-   1-3: Poor quality. Blurry, distorted, anatomically wrong, obvious generation failures.
-   Red flags that cap this score at 5: distorted faces, extra fingers, unnatural body proportions, text gibberish baked into image, watermarks, double subjects.
-
-5. TEXT OVERLAY SPACE (1-10) — "Is there clean space for text?"
-   10: Perfect clean area in specified location ({text_overlay_space}). Consistent tone, no competing elements.
-   8-9: Good space available. Minor adjustments would make it perfect.
-   6-7: Usable space but some visual noise. Text will need a backing bar.
-   4-5: Difficult space. Text would be hard to read without heavy backing.
-   1-3: No usable space. Busy throughout. Text would be unreadable.
-
-6. POLICY SAFE (boolean + score):
-   Check for: graphic violence, nudity or sexual content, hate symbols, political figures or symbols, misleading visual elements, copyrighted logos or characters, images of real identifiable people without consent indicators.
-   Score 1 = FAIL (do not use, do not regenerate this prompt, flag for review)
-   Score 10 = CLEAN (safe to publish)
-
-OVERALL SCORE FORMULA:
-  overall = (visual_impact × 0.30) + (regional_authenticity × 0.25) + 
-            (niche_relevance × 0.15) + (professional_quality × 0.20) + 
-            (text_space × 0.10)
-  
-  If policy_safe = false → override overall to 0.0 regardless of other scores.
-  If overall < 7.0 → regenerate = true
-  If overall ≥ 7.0 AND policy_safe = true → regenerate = false (APPROVED)
-
-REGENERATION GUIDANCE — if regenerate = true:
-  Provide specific, actionable improvement_instructions for the next attempt.
-  Be precise: "The image lacks regional authenticity — add {specific regional element}. Switch to provider {X} for better handling of {quality issue}."
-
-OUTPUT FORMAT: Return strict JSON only. No explanation. No markdown. No preamble.
-{
-  "image_id": "{image_id}",
-  "evaluation_timestamp": "ISO8601",
-  "visual_impact_score": 0,
-  "visual_impact_reason": "",
-  "regional_authenticity_score": 0,
-  "regional_authenticity_reason": "",
-  "niche_relevance_score": 0,
-  "niche_relevance_reason": "",
-  "professional_quality_score": 0,
-  "professional_quality_reason": "",
-  "text_space_score": 0,
-  "text_space_location": "top_third|bottom_third|left_third|right_half|center_clean|bottom_bar|none",
-  "text_space_usable": true,
-  "policy_safe": true,
-  "policy_concerns": [],
-  "overall_score": 0.0,
-  "approve": true,
-  "regenerate": false,
-  "regeneration_attempt_number": 0,
-  "improvement_instructions": "",
-  "provider_switch_recommended": "",
-  "simplified_prompt_needed": false,
-  "fallback_to_pexels": false
-}
+Requirements:
+- Numeric score fields must be from 0 to 10.
+- policy_safe must be a JSON boolean.
+- issues must be an array of strings; use an empty array when there are no obvious issues.
+- Do not assume a photo is safe merely because it looks realistic or professional.

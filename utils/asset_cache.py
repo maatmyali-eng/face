@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional
 import requests
 
 from utils.logger import get_logger
-from utils.rate_limiter import PEXELS_LIMITER
+from utils.rate_limiter import PEXELS_LIMITER, PIXABAY_LIMITER
 
 logger = get_logger("asset_cache")
 
@@ -34,9 +34,17 @@ _ROOT = Path(__file__).parent.parent
 _CACHE_MANIFEST = _ROOT / "state" / "asset_cache.json"
 _VIDEO_CLIP_MAX_AGE_DAYS = 7
 
+_PIXABAY_IMAGES_URL = "https://pixabay.com/api/"
+_PIXABAY_VIDEOS_URL = "https://pixabay.com/api/videos/"
+
+# Required API-response cache: 24 hours.
+_PIXABAY_SEARCH_CACHE_DIR = _ROOT / "state" / "pixabay_search_cache"
+_PIXABAY_SEARCH_CACHE_TTL = 24 * 60 * 60
+
 # Pexels API endpoint
+# Official Pexels REST API endpoints
 _PEXELS_PHOTOS_URL = "https://api.pexels.com/v1/search"
-_PEXELS_VIDEOS_URL = "https://api.pexels.com/videos/search"
+_PEXELS_VIDEOS_URL = "https://api.pexels.com/v1/videos/search"
 
 # Asset types that are retained forever
 _PERMANENT_TYPES = {"font", "audio"}
@@ -176,26 +184,451 @@ class AssetCache:
         dest_path = dest_dir_path / filename
         logger.info("Downloading asset '%s' from %s", asset_id, url)
 
+
+        temp_path = dest_path.with_name(dest_path.name + ".part")
+        headers = {
+            "User-Agent": (
+                "FACE/1.0 "
+                "(https://github.com/maatmyali-eng/face)"
+            ),
+            "Accept": "*/*",
+        }
+        last_error = None
+
         for attempt in range(3):
             try:
-                urllib.request.urlretrieve(url, str(dest_path))
-                if dest_path.exists() and dest_path.stat().st_size > 0:
-                    self.register(asset_id, asset_type, str(dest_path), source_url=url)
-                    logger.info("Asset cached → %s", dest_path)
-                    return str(dest_path)
-                raise IOError("Downloaded file is empty.")
-            except Exception as exc:
-                wait = 2 ** attempt
-                logger.warning(
-                    "Download attempt %d/3 failed for '%s': %s — retrying in %ds.",
-                    attempt + 1, asset_id, exc, wait,
+                with requests.get(
+                    url,
+                    headers=headers,
+                    stream=True,
+                    allow_redirects=True,
+                    timeout=(15, 90),
+                ) as response:
+                    if response.status_code == 403:
+                        detail = response.text[:180].replace(
+                            "\n", " "
+                        )
+                        raise requests.HTTPError(
+                            f"HTTP 403 Forbidden at {response.url}. "
+                            f"Response: {detail}",
+                            response=response,
+                        )
+
+                    response.raise_for_status()
+
+                    content_type = response.headers.get(
+                        "Content-Type", ""
+                    ).lower()
+
+                    if "text/html" in content_type:
+                        raise RuntimeError(
+                            "The server returned HTML instead of "
+                            "the requested media file. The download "
+                            "may have been blocked."
+                        )
+
+                    with temp_path.open("wb") as output:
+                        for chunk in response.iter_content(
+                            chunk_size=256 * 1024
+                        ):
+                            if chunk:
+                                output.write(chunk)
+
+                if (
+                    not temp_path.exists()
+                    or temp_path.stat().st_size == 0
+                ):
+                    raise IOError("Downloaded file is empty.")
+
+                os.replace(temp_path, dest_path)
+                self.register(
+                    asset_id,
+                    asset_type,
+                    str(dest_path),
+                    source_url=url,
                 )
+                logger.info("Asset cached → %s", dest_path)
+                return str(dest_path)
+
+            except Exception as exc:
+                last_error = exc
+
+                try:
+                    temp_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+                status_code = getattr(
+                    getattr(exc, "response", None),
+                    "status_code",
+                    None,
+                )
+
+                logger.warning(
+                    "Download attempt %d/3 failed for '%s': %s",
+                    attempt + 1,
+                    asset_id,
+                    exc,
+                )
+
+                # A 403 is an access denial, not a transient failure.
+                # Avoid making two more identical requests.
+                if status_code == 403:
+                    break
+
                 if attempt < 2:
+                    wait = 2 ** attempt
                     time.sleep(wait)
 
         raise RuntimeError(
-            f"Failed to download asset '{asset_id}' from {url} after 3 attempts."
+            f"Failed to download asset '{asset_id}'. "
+            f"Last error: {last_error}"
+        ) from last_error
+
+
+    def _pixabay_search(
+        self,
+        endpoint: str,
+        query: str,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Search Pixabay and cache successful API responses for 24 hours."""
+        api_key = os.environ.get("PIXABAY_API_KEY", "").strip()
+        if not api_key:
+            raise EnvironmentError(
+                "PIXABAY_API_KEY is not configured."
+            )
+
+        query = " ".join(query.split())[:100]
+        if not query:
+            raise ValueError("Pixabay search query cannot be empty.")
+
+        search_filters = dict(filters or {})
+        params = {
+            "q": query,
+            "safesearch": "true",
+            "order": "popular",
+            "per_page": 5,
+            **search_filters,
+        }
+
+        # Do not include the secret key in the cache filename or saved data.
+        cache_basis = json.dumps(
+            {
+                "endpoint": endpoint,
+                "params": params,
+            },
+            sort_keys=True,
+            ensure_ascii=False,
         )
+        cache_id = hashlib.sha256(
+            cache_basis.encode("utf-8")
+        ).hexdigest()
+        cache_path = _PIXABAY_SEARCH_CACHE_DIR / f"{cache_id}.json"
+
+        # Reuse the API response for 24 hours.
+        try:
+            if cache_path.is_file():
+                cached = json.loads(
+                    cache_path.read_text(encoding="utf-8")
+                )
+                age = time.time() - float(cached["fetched_at"])
+                data = cached["data"]
+                if (
+                    0 <= age < _PIXABAY_SEARCH_CACHE_TTL
+                    and isinstance(data, dict)
+                ):
+                    logger.debug("Pixabay search-cache hit.")
+                    return data
+        except (OSError, ValueError, KeyError, TypeError):
+            logger.warning("Ignoring invalid Pixabay search cache.")
+
+        PIXABAY_LIMITER.acquire()
+
+        try:
+            response = requests.get(
+                endpoint,
+                params={**params, "key": api_key},
+                timeout=25,
+            )
+        except requests.RequestException:
+            raise RuntimeError(
+                "Pixabay API network request failed."
+            ) from None
+
+        if response.status_code == 429:
+            raise RuntimeError(
+                "Pixabay rate limit reached (HTTP 429)."
+            )
+
+        if response.status_code != 200:
+            raise RuntimeError(
+                f"Pixabay API returned HTTP {response.status_code}. "
+                "Check the API key and request parameters."
+            )
+
+        try:
+            data = response.json()
+        except ValueError:
+            raise RuntimeError(
+                "Pixabay returned an invalid JSON response."
+            ) from None
+
+        if not isinstance(data, dict):
+            raise RuntimeError("Unexpected Pixabay API response.")
+
+        # Persist the response so subsequent runs can reuse it.
+        try:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            temporary_path = cache_path.with_name(
+                f"{cache_path.stem}.{time.time_ns()}.tmp"
+            )
+            temporary_path.write_text(
+                json.dumps(
+                    {
+                        "fetched_at": time.time(),
+                        "data": data,
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            os.replace(temporary_path, cache_path)
+        except OSError as exc:
+            # Don't lose usable results if local cache writing fails.
+            logger.warning(
+                "Could not persist Pixabay search cache: %s",
+                type(exc).__name__,
+            )
+
+        return data
+
+
+    def _record_pixabay_source(
+        self,
+        asset_id: str,
+        asset_type: str,
+        item: Dict[str, Any],
+    ) -> None:
+        """Keep source and contributor details in the asset manifest."""
+        manifest = self._load_manifest()
+        entry = manifest.get(self._make_key(asset_id, asset_type))
+        if entry is None:
+            return
+
+        entry.update({
+            "source_provider": "Pixabay",
+            "source_page_url": str(item.get("pageURL", "")),
+            "source_id": str(item.get("id", "")),
+            "contributor": str(item.get("user", "")),
+            "contributor_id": str(item.get("user_id", "")),
+        })
+        self._save_manifest(manifest)
+
+    def download_pixabay_photo(
+        self,
+        query: str,
+        orientation: str = "portrait",
+        cache_dir: Optional[str] = None,
+        image_type: str = "photo",
+        category: Optional[str] = None,
+        editors_choice: bool = False,
+        order: str = "popular",
+    ) -> str:
+        """Find and download a Pixabay image through its official API."""
+        orientation_map = {
+            "portrait": "vertical",
+            "landscape": "horizontal",
+        }
+        if orientation not in (
+            "portrait", "landscape", "square", "all"
+        ):
+            raise ValueError(
+                "orientation must be portrait, landscape, square, or all"
+            )
+
+        filters: Dict[str, Any] = {
+            "image_type": image_type,
+            "order": order,
+        }
+        if orientation in orientation_map:
+            filters["orientation"] = orientation_map[orientation]
+        if category:
+            filters["category"] = category
+        if editors_choice:
+            filters["editors_choice"] = "true"
+
+        data = self._pixabay_search(
+            _PIXABAY_IMAGES_URL, query, filters
+        )
+        hits = data.get("hits", [])
+        if not hits:
+            raise RuntimeError(
+                f"Pixabay returned no images for query={query!r}."
+            )
+
+        # For square content, prefer images closest to a 1:1 aspect ratio.
+        if orientation == "square":
+            hits = sorted(
+                hits,
+                key=lambda hit: abs(
+                    (
+                        float(hit.get("imageWidth") or 1)
+                        / float(hit.get("imageHeight") or 1)
+                    ) - 1.0
+                ),
+            )
+
+        photo = hits[0]
+        image_url = (
+            photo.get("largeImageURL")
+            or photo.get("webformatURL")
+            or ""
+        )
+        if not image_url:
+            raise RuntimeError(
+                "Pixabay result did not contain a usable image URL."
+            )
+
+        photo_id = str(photo.get("id", ""))
+        if not photo_id:
+            raise RuntimeError("Pixabay image result has no ID.")
+
+        asset_id = f"pixabay_photo_{photo_id}"
+        if cache_dir is None:
+            cache_dir = str(_ROOT / "state" / "temp")
+
+        path = self.download_if_missing(
+            image_url,
+            asset_id,
+            "stock_photo",
+            cache_dir,
+            f"{asset_id}.jpg",
+        )
+        self._record_pixabay_source(
+            asset_id, "stock_photo", photo
+        )
+        return path
+
+    def download_pixabay_video(
+        self,
+        query: str,
+        orientation: str = "portrait",
+        cache_dir: Optional[str] = None,
+        category: Optional[str] = None,
+        video_type: str = "all",
+        editors_choice: bool = False,
+        order: str = "popular",
+    ) -> str:
+        """Find, select, and download a Pixabay video clip."""
+        if orientation not in ("portrait", "landscape"):
+            raise ValueError(
+                "Video orientation must be portrait or landscape."
+            )
+
+        filters: Dict[str, Any] = {
+            "video_type": video_type,
+            "order": order,
+        }
+        if category:
+            filters["category"] = category
+        if editors_choice:
+            filters["editors_choice"] = "true"
+
+        data = self._pixabay_search(
+            _PIXABAY_VIDEOS_URL, query, filters
+        )
+        hits = data.get("hits", [])
+        if not hits:
+            raise RuntimeError(
+                f"Pixabay returned no videos for query={query!r}."
+            )
+
+        # Prefer a rendition matching the requested orientation.
+        # Prefer medium/small files to limit download size.
+        quality_order = ("medium", "small", "large", "tiny")
+        fallback = None
+        selected = None
+        max_bytes = 100 * 1024 * 1024
+
+        for video in hits:
+            renditions = video.get("videos") or {}
+            candidates = []
+
+            for quality in quality_order:
+                rendition = renditions.get(quality) or {}
+                url = rendition.get("url")
+                if not url:
+                    continue
+
+                width = int(rendition.get("width") or 0)
+                height = int(rendition.get("height") or 0)
+                size = int(rendition.get("size") or 0)
+                if size > max_bytes:
+                    continue
+
+                # Copy the dictionary; don't mutate the API response.
+                candidate = dict(rendition)
+                candidate["_quality"] = quality
+                candidates.append(candidate)
+
+            if not candidates:
+                continue
+
+            if fallback is None:
+                fallback = (video, candidates[0])
+
+            if orientation == "portrait":
+                matching = [
+                    item for item in candidates
+                    if int(item.get("height") or 0)
+                    > int(item.get("width") or 0)
+                ]
+            else:
+                matching = [
+                    item for item in candidates
+                    if int(item.get("width") or 0)
+                    >= int(item.get("height") or 0)
+                ]
+
+            if matching:
+                selected = (video, matching[0])
+                break
+
+        if selected is None:
+            selected = fallback
+        if selected is None:
+            raise RuntimeError(
+                "Pixabay returned no usable video rendition."
+            )
+
+        video, rendition = selected
+        video_url = rendition["url"]
+
+        # Pixabay's documented download parameter for video URLs.
+        separator = "&" if "?" in video_url else "?"
+        if "download=1" not in video_url:
+            video_url = f"{video_url}{separator}download=1"
+        video_id = str(video.get("id", ""))
+        if not video_id:
+            raise RuntimeError("Pixabay video result has no ID.")
+
+        asset_id = f"pixabay_video_{video_id}"
+        if cache_dir is None:
+            cache_dir = str(_ROOT / "state" / "temp")
+
+        path = self.download_if_missing(
+            video_url,
+            asset_id,
+            "video_clip",
+            cache_dir,
+            f"{asset_id}.mp4",
+        )
+        self._record_pixabay_source(
+            asset_id, "video_clip", video
+        )
+        return path
+
 
     # -----------------------------------------------------------------------
     # Pexels helpers

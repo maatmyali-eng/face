@@ -249,6 +249,29 @@ def _provider_pexels(
         return None
 
 
+def _provider_pixabay(
+    query: str,
+    orientation: str,
+    post_id: str,
+    attempt: int,
+) -> Path | None:
+    """Pixabay stock-photo fallback."""
+    if not os.environ.get("PIXABAY_API_KEY", "").strip():
+        log.info("[Pixabay] Skipping: PIXABAY_API_KEY is not configured.")
+        return None
+
+    try:
+        cache = get_asset_cache()
+        path = cache.download_pixabay_photo(
+            query=query,
+            orientation=orientation,
+        )
+        log.info("[Pixabay] Photo ready for post %s", post_id)
+        return Path(path)
+    except Exception as exc:
+        log.warning("[Pixabay] Failed for post %s: %s", post_id, exc)
+        return None
+
 # ── Quality gate ──────────────────────────────────────────────────────────────
 
 
@@ -421,6 +444,45 @@ def _generate_image(
         if improvement:
             improved_prompt = f"{prompt_hf}. {improvement}"
             log.debug("Improved prompt: %s", improved_prompt[:120])
+
+        # Try Pixabay before Pexels when all image-generation providers fail.
+    pixabay_path = _provider_pixabay(
+        pexels_query, orientation, post_id, attempt + 1
+    )
+
+    if pixabay_path:
+        qa = _run_quality_gate(gemini, pixabay_path, config)
+        score = float(qa.get("overall_score", 0.0))
+        policy_safe = bool(qa.get("policy_safe", False))
+
+        qa_records.append({
+            "post_id": post_id,
+            "attempt": attempt + 1,
+            "provider": "Pixabay",
+            "score": score,
+            "policy_safe": policy_safe,
+            "improvement_instructions": qa.get(
+                "improvement_instructions", ""
+            ),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "fallback": True,
+        })
+
+        # Do not approve a stock image that fails the quality gate.
+        if policy_safe and score >= min_score:
+            approved_path = ASSETS_APPROVED / f"{post_id}.jpg"
+            pixabay_path.replace(approved_path)
+            return (
+                approved_path,
+                "pixabay",
+                score,
+                attempt + 1,
+            )
+
+        log.warning(
+            "Pixabay image failed the quality gate for post %s.",
+            post_id,
+        )
 
     # ── All generative providers failed — force Pexels ──────────────────────
     log.warning(
