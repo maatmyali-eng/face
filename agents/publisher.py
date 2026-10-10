@@ -324,6 +324,15 @@ def run_publishing_loop(
 def main() -> None:
     """PublisherAgent entry point."""
     log.info("══ PublisherAgent starting ══")
+
+    # Default to safe mode: never publish without explicit opt-in.
+    if os.getenv("ENABLE_FACEBOOK_PUBLISHING", "").strip().lower() != "true":
+        log.warning(
+            "SAFE MODE: Facebook publishing disabled. "
+            "No post will be published."
+        )
+        return
+
     run_at = _now_utc()
 
     # ── Pre-flight: token_expired halt flag ───────────────────────────────
