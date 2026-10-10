@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - '.github/workflows/daily_pipeline.yml'
       - 'agents/**'
       - 'utils/**'
       - 'prompts/**'
@@ -38,6 +39,7 @@ jobs:
       PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GITHUB_REPOSITORY: ${{ github.repository }}
+      PYTHONPATH: ${{ github.workspace }}
 
     steps:
       # ── Step 1: Checkout repository ──────────────────────────────────────
@@ -176,6 +178,7 @@ jobs:
           fi
 
           mkdir -p /tmp/face-state/state
+          touch /tmp/face-state/state/.gitkeep
           if [ -d state ]; then
             cp -a state/. /tmp/face-state/state/
           fi
