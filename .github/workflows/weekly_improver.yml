@@ -20,6 +20,7 @@ jobs:
       FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GITHUB_REPOSITORY: ${{ github.repository }}
+      PYTHONPATH: ${{ github.workspace }}
 
     steps:
       # ── Step 1: Checkout repository ──────────────────────────────────────
