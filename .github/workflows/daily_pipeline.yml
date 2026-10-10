@@ -134,7 +134,7 @@ jobs:
 
       - name: Publisher disabled - safe mode
         if: ${{ vars.ENABLE_FACEBOOK_PUBLISHING != 'true' }}
-        run: echo "SAFE MODE: Publisher skipped; no Facebook post was attempted.
+        run: echo "SAFE MODE: Publisher skipped; no Facebook post was attempted."
 
       # ── Step 15: Commit state back to state branch ────────────────────────
       - name: Commit state back to state branch
