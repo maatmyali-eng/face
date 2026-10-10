@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/daily_pipeline.yml'
       - 'agents/**'
       - 'utils/**'
       - 'prompts/**'
@@ -182,7 +181,8 @@ jobs:
           fi
 
           cd /tmp/face-state
-          git add state/
+          # /state is intentionally gitignored on main; force-add runtime state on this dedicated branch.
+          git add -f state/
           if git diff --cached --quiet; then
             echo "No persistent state changes to commit."
           else
