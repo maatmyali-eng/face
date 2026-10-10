@@ -18,6 +18,7 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GITHUB_REPOSITORY: ${{ github.repository }}
+      PYTHONPATH: ${{ github.workspace }}
 
     steps:
       # ── Step 1: Checkout repository ──────────────────────────────────────
