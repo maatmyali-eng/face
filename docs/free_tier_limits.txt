@@ -1,0 +1,73 @@
+╔══════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                        FACE — COMPLETE FREE TIER LIMITS REFERENCE                                   ║
+╚══════════════════════════════════════════════════════════════════════════════════════════════════════╝
+
+Service              │ Free Limit                      │ FACE Daily Usage         │ Monthly Budget Used
+─────────────────────┼─────────────────────────────────┼──────────────────────────┼─────────────────────
+Google Gemini        │ 15 req/min (RPM)                │ ~3–5 req/min peak        │ ~4,500–9,000 req/mo
+(gemini-1.5-flash)   │ 1,000,000 tokens/min            │ ~50,000 tokens/day       │ within limit
+                     │ 1,500 req/day                   │ ~300 req/day (3 posts    │ 9,000/45,000 limit
+                     │                                 │  + reels + improvements) │ (~20% used)
+─────────────────────┼─────────────────────────────────┼──────────────────────────┼─────────────────────
+Pollinations.ai      │ Unlimited (no key, no account)  │ ~3–9 images/day          │ Unlimited
+(image generation)   │ Rate limit: polite use          │ (primary provider)       │
+                     │ No formal SLA                   │                          │
+─────────────────────┼─────────────────────────────────┼──────────────────────────┼─────────────────────
+Hugging Face         │ ~1,000 inference req/day        │ ~3–9 images/day          │ ~90–270/30,000 limit
+Inference API        │ (serverless, free tier)         │ (secondary provider,     │ (~1–2% used)
+(FLUX.1-schnell,     │ Burst: ~10 req/min              │  only when Pollinations  │
+ Stable Diffusion XL)│ Model availability varies       │  fails)                  │
+─────────────────────┼─────────────────────────────────┼──────────────────────────┼─────────────────────
+Pexels API           │ 200 req/hour                    │ 0–9 images/day           │ ~0–270/20,000 limit
+(stock images)       │ 20,000 req/month                │ (fallback only)          │ (<2% used)
+─────────────────────┼─────────────────────────────────┼──────────────────────────┼─────────────────────
+Facebook Graph API   │ 200 calls/hour per token        │ ~6–12 calls/day          │ ~180–360 calls/mo
+                     │ No monthly request limit        │ (publish + insights)     │ (no monthly cap)
+                     │ Token expires every ~60 days    │                          │
+─────────────────────┼─────────────────────────────────┼──────────────────────────┼─────────────────────
+GitHub Actions       │ 2,000 minutes/month             │ ~11–33 min/run           │ ~990–2,970 min/mo
+                     │ (free accounts)                 │ (3 runs/day)             │
+                     │ ubuntu-latest: 1× multiplier    │ Breakdown per run:       │ ⚠️ Can hit limit if
+                     │                                 │  Setup:         ~3 min   │ reels run every day
+                     │                                 │  Content agents:~4 min   │
+                     │                                 │  Visual agents: ~3 min   │ RECOMMENDED:
+                     │                                 │  Reel (if any): ~8 min   │ reels_per_week ≤ 3
+                     │                                 │  Publisher:     ~1 min   │ → ~1,100 min/mo ✅
+─────────────────────┼─────────────────────────────────┼──────────────────────────┼─────────────────────
+edge-tts             │ Completely free                 │ ~2–8 TTS calls/reel      │ Unlimited
+(Microsoft TTS)      │ No account required             │                          │
+                     │ No published rate limits        │                          │
+─────────────────────┼─────────────────────────────────┼──────────────────────────┼─────────────────────
+yt-dlp               │ Free (open source)              │ ~2–3 tracks/week cached  │ ~8–12 downloads/mo
+(music tracks)       │ Tracks cached in manifest       │ (never re-downloaded)    │ (cached forever)
+─────────────────────┼─────────────────────────────────┼──────────────────────────┼─────────────────────
+GitHub Storage       │ 1 GB for free accounts          │ state/ branch: ~5 MB/day │ ~150 MB/month
+(state branch        │ 50 MB per push recommended      │ assets/ cache: ~100 MB   │ (well within limit)
+ + asset cache)      │                                 │ (stable after bootstrap) │
+─────────────────────┼─────────────────────────────────┼──────────────────────────┼─────────────────────
+Pillow               │ Open source — free              │ Image overlay + resize   │ Unlimited
+moviepy + ffmpeg     │ Open source — free              │ Reel assembly (~8 min)   │ Unlimited
+pydub                │ Open source — free              │ Audio mixing for reels   │ Unlimited
+─────────────────────┴─────────────────────────────────┴──────────────────────────┴─────────────────────
+
+CRITICAL LIMITS TO WATCH
+──────────────────────────────────────────────────────────────────────────────────
+
+⚠️  GitHub Actions minutes
+    Running reels every day = ~2,970 min/month vs 2,000 min free limit.
+    FIX: Set reels_per_week: 2 or 3 in config.yml.
+    With 3 reels/week → ~1,395 min/month (safe margin).
+
+⚠️  Gemini daily quota (1,500 req/day)
+    Resets at midnight Pacific time. On exhaustion, FACE logs
+    GeminiQuotaExhaustedError and skips gracefully — no data corruption.
+    Next pipeline run at quota reset continues normally.
+
+⚠️  Facebook token expiry (~60 days)
+    Cannot be automated — requires your manual refresh.
+    FACE creates a GitHub Issue when it detects expiry (error code 190).
+    This is the only ongoing human touchpoint in the entire system.
+
+✅  Everything else is either unlimited, extremely conservatively used,
+    or auto-managed by FACE's built-in rate limiting and caching.
+──────────────────────────────────────────────────────────────────────────────────

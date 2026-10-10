@@ -1,0 +1,94 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║              FACE — 60-SECOND REEL ASSEMBLY TIMELINE                        ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+TIME →  0s         5s        10s        15s        25s        45s       55s   60s
+        │          │         │          │          │          │         │     │
+        ▼          ▼         ▼          ▼          ▼          ▼         ▼     ▼
+────────┼──────────┼─────────┼──────────┼──────────┼──────────┼─────────┼─────┤
+
+SEGMENT │◄── SEG 0 ──►│◄─────── SEG 1 ─────────►│◄────── SEG 2 ──────►│ S3 │ S4│
+        │  HOOK (5s)  │    BODY POINT 1 (10s)    │  BODY POINT 2 (20s) │10s │5s │
+        │             │                           │                     │    │   │
+────────┼─────────────┼───────────────────────────┼─────────────────────┼────┼───┤
+
+VISUAL  │ Text card   │ Generated image / stock   │ Generated image /   │ S. │Txt│
+LAYER   │ BOLD WHITE  │ video clip                │ stock video clip    │vid │crd│
+        │ Hook text   │ zoom_in animation         │ fade_in animation   │    │   │
+        │ fade_in     │ warm color grade          │ neutral grade       │    │CTA│
+────────┼─────────────┼───────────────────────────┼─────────────────────┼────┼───┤
+
+VOICE   │ Hook read   │ Body narration point 1    │ Body narration 2    │Nar │CTA│
+LAYER   │ by TTS      │ (edge-tts, en-BD-NabaraF) │ (same voice)        │    │vce│
+(TTS)   │ (fast +10%) │ (normal speed +0%)        │ (normal speed +0%)  │    │   │
+────────┼─────────────┼───────────────────────────┼─────────────────────┼────┼───┤
+
+MUSIC   │◄──────────────── Background Music Track (full duration) ─────────────►│
+LAYER   │ Mood: energetic / calm / inspiring / upbeat / emotional / mysterious   │
+        │ Volume: 20% under voice, fade in 1s at start, fade out 2s at end      │
+────────┼─────────────┼───────────────────────────┼─────────────────────┼────┼───┤
+
+SUBS    │◄──────────────── Subtitles (SRT burned in) ────────────────────────►  │
+LAYER   │ Position: bottom 10% of frame           │ Font: NotoSans Bold 48px    │
+        │ Color: white text, semi-transparent bg  │ Language: as per config     │
+────────┼─────────────┼───────────────────────────┼─────────────────────┼────┼───┤
+
+OUTPUT  │◄────────────────────── 1080 × 1920 px (9:16) ─────────────────────►  │
+SPEC    │ H.264 video  │  AAC audio  │  30 fps  │  CRF 23  │  max 100 MB       │
+
+════════════════════════════════════════════════════════════════════════════════
+
+SEGMENT DETAIL
+──────────────
+
+SEG 0 — HOOK (0–5s)
+  Visual:    text_card ("bold_white" style) with reel_script.hook text
+  Overlay:   Large bold text centered, slight shadow, 1s fade-in
+  Voice:     TTS reads hook text (+10% speed for energy)
+  Animation: fade_in
+  Purpose:   Stop-scroll moment — must grab attention in first 2 seconds
+
+SEG 1–N — BODY SEGMENTS (variable duration, 5s–20s each)
+  Visual:    generated_image OR stock_video (per segment visual_type field)
+             → generated_image: from image_prompt via Pollinations/HF
+             → stock_video: yt-dlp search via stock_video_search_query
+  Overlay:   Text overlay on image (if text_overlay_space != null)
+  Voice:     TTS reads voiceover_text per segment (tts_voice from plan)
+  Animation: zoom_in | fade_in | pan_left | pan_right (from segment plan)
+  Grade:     warm | cold | neutral | dramatic (from segment color_grade)
+
+FINAL SEG — CTA (last 5s)
+  Visual:    text_card with CTA text (e.g. "Follow for more travel tips!")
+  Overlay:   CTA text + follow button emoji
+  Voice:     TTS reads CTA text
+  Animation: fade_in, fade_out at end
+
+════════════════════════════════════════════════════════════════════════════════
+
+AUDIO MIXING DETAIL
+───────────────────
+
+Layer 1: TTS Voiceover  — 100% volume, generated per segment
+Layer 2: Background Music — 20% volume during speech, 60% during text cards
+         Crossfade: 0.5s between segments
+
+Output audio: AAC 128kbps, stereo, 44.1kHz
+
+TTS Voice selection (from config / reel_script audio_mood):
+  English:  en-US-ChristopherNeural (male) or en-US-JennyNeural (female)
+  Bangla:   bn-BD-NabaraFemaleNeural or bn-BD-PradeepMaleNeural
+  Bilingual: voice switches on [EN] / [BN] markers in reel_script segments
+
+════════════════════════════════════════════════════════════════════════════════
+
+TEMP FILE LOCATIONS (auto-deleted after successful export)
+──────────────────────────────────────────────────────────
+  assets/audio/temp/{reel_id}_seg{N}.mp3    ← per-segment TTS audio
+  assets/audio/temp/{reel_id}_music.mp3     ← downloaded music track
+  assets/audio/temp/{reel_id}_mixed.mp3     ← mixed audio track
+  assets/images/reel/{reel_id}_seg{N}.jpg   ← per-segment images
+  assets/videos/clips/{reel_id}_seg{N}.mp4  ← per-segment video clips
+
+FINAL OUTPUT:
+  assets/videos/final/{reel_id}.mp4
+  assets/images/final/{reel_id}_thumb.jpg   ← frame at thumbnail_segment_index

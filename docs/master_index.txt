@@ -1,0 +1,100 @@
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║          FACE — MASTER FILE INDEX (All 6 Sessions)                             ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+=== SYSTEM COMPLETE ===
+
+File Path                                  │ Session │ Purpose
+───────────────────────────────────────────┼─────────┼─────────────────────────────────────────────────
+.github/workflows/daily_pipeline.yml       │    6    │ Cron: runs all 6 pipeline agents 3×/day
+.github/workflows/monthly_watcher.yml      │    6    │ Cron: runs AlgorithmWatcherAgent on 1st of month
+.github/workflows/weekly_improver.yml      │    6    │ Cron: runs SelfImprovementAgent every Sunday
+requirements.txt                           │    6    │ All Python dependencies with version pins
+README.md                                  │    6    │ Complete setup guide and documentation
+docs/visual_qa_flowchart.txt               │    6    │ ASCII decision tree for image QA and fallback logic
+docs/reel_assembly_timeline.txt            │    6    │ ASCII timeline of 60-second reel segment layout
+docs/free_tier_limits.txt                  │    6    │ All services, free limits, and daily usage table
+docs/master_index.txt                      │    6    │ This file — complete handoff index
+───────────────────────────────────────────┼─────────┼─────────────────────────────────────────────────
+config.yml                                 │    1    │ Master configuration: page, audience, schedule, APIs
+───────────────────────────────────────────┼─────────┼─────────────────────────────────────────────────
+prompts/post_caption.txt                   │    1    │ Gemini prompt: generate Facebook post captions
+prompts/story_content.txt                  │    1    │ Gemini prompt: generate Story slide text
+prompts/reel_script.txt                    │    1    │ Gemini prompt: generate Reel voiceover scripts
+prompts/trend_analysis.txt                 │    1    │ Gemini prompt: score and filter trending topics
+prompts/strategy_decision.txt              │    1    │ Gemini prompt: build daily content calendar
+prompts/algorithm_research.txt             │    1    │ Gemini prompt: research FB algorithm rules
+prompts/self_improvement.txt               │    1    │ Gemini prompt: rewrite underperforming prompts
+prompts/visual_brief_generator.txt         │    1    │ Gemini prompt: create image art direction brief
+prompts/image_quality_evaluator.txt        │    1    │ Gemini vision prompt: score generated images
+prompts/reel_script_visual_director.txt    │    1    │ Gemini prompt: plan reel segment visual types
+prompts/visual_trend_researcher.txt        │    1    │ Gemini prompt: research visual style trends
+───────────────────────────────────────────┼─────────┼─────────────────────────────────────────────────
+utils/config_loader.py                     │    2    │ Load and validate config.yml; build prompt context dict
+utils/state_manager.py                     │    2    │ Thread-safe JSON state read/write with filelock
+utils/logger.py                            │    2    │ Rotating log handler; dual stdout + file output
+utils/gemini_client.py                     │    2    │ Gemini API wrapper: rate limiting, retry, JSON stripping
+utils/facebook_client.py                   │    2    │ Facebook Graph API client; token expiry → GitHub Issue
+utils/rate_limiter.py                      │    2    │ Per-API token bucket rate limiters (shared singletons)
+utils/image_utils.py                       │    2    │ Pillow helpers: text overlay, resize, color grade
+utils/video_utils.py                       │    2    │ moviepy helpers: reel assembly, subtitle burn, export
+utils/audio_utils.py                       │    2    │ edge-tts TTS; yt-dlp music; subtitle timing generation
+utils/asset_cache.py                       │    2    │ TTL cache for Pexels results; persistent JSON store
+───────────────────────────────────────────┼─────────┼─────────────────────────────────────────────────
+agents/trend_hunter.py                     │    3    │ Agent 1: research trends → state/trends.json
+agents/content_strategy.py                 │    3    │ Agent 2: build content calendar → state/content_plan.json
+agents/content_generator.py               │    3    │ Agent 3: write captions+scripts → state/generated_content.json
+───────────────────────────────────────────┼─────────┼─────────────────────────────────────────────────
+agents/visual_director.py                  │    4    │ Agent 4: generate/QA images → visual_briefs.json + qa_log.json
+agents/reel_producer.py                    │    4    │ Agent 5: assemble reel MP4s → reel_plans.json + assets/videos/
+───────────────────────────────────────────┼─────────┼─────────────────────────────────────────────────
+agents/publisher.py                        │    5    │ Agent 6: post to Facebook → publish_log.json + post_history.json
+agents/algorithm_watcher.py               │    5    │ Agent 7 (monthly): research FB algorithm → algorithm_rules.json
+agents/self_improver.py                    │    5    │ Agent 8 (weekly): analyze performance + rewrite prompts
+───────────────────────────────────────────┼─────────┼─────────────────────────────────────────────────
+STATE FILES (generated at runtime, stored on state branch)
+───────────────────────────────────────────┼─────────┼─────────────────────────────────────────────────
+state/trends.json                          │  3 (w)  │ TrendHunter output: 10 scored trend objects
+state/content_plan.json                    │  3 (w)  │ ContentStrategy output: daily post calendar
+state/schedule.json                        │  3 (w)  │ ContentStrategy output: exact UTC post times
+state/generated_content.json              │  3 (w)  │ Captions + scripts (updated by Sessions 4 and 5)
+state/visual_briefs.json                   │  4 (w)  │ VisualDirector output: per-post image art direction
+state/reel_plans.json                      │  4 (w)  │ ReelProducer output: per-reel segment shot plans
+state/qa_log.json                          │  4 (w)  │ VisualDirector output: image QA scores per attempt
+state/publish_log.json                     │  5 (w)  │ Publisher output: publish attempt audit trail
+state/post_history.json                    │  5 (w)  │ Publisher output: all published posts + metrics
+state/skipped.json                         │3,4,5(w) │ Items skipped for safety, quality, or token failure
+state/errors.json                          │  5 (w)  │ All agent CRITICAL errors with timestamps
+state/algorithm_rules.json                 │  5 (w)  │ AlgorithmWatcher output: FB ranking signals
+state/visual_style.json                    │  5 (w)  │ AlgorithmWatcher output: trending visual styles
+state/best_practices.json                  │  5 (w)  │ AlgorithmWatcher output: monthly best practices
+state/performance_report.json             │  5 (w)  │ SelfImprover output: weekly engagement analysis
+state/improvement_log.json                 │  5 (w)  │ SelfImprover output: prompt rewrite changelog
+state/prompt_versions/{p}/{date}.txt       │  5 (w)  │ Archived prompt versions before each rewrite
+state/prompt_versions/{p}/{date}.meta.json │  5 (w)  │ Version metadata: engagement at time of change
+state/gemini_quota.json                    │  2 (w)  │ Gemini daily usage counter and exhaustion flag
+state/rate_limits.json                     │  2 (w)  │ Per-API token bucket persistent state
+state/token_expired.json                   │  2 (w)  │ Flag written by facebook_client.py on error 190
+state/asset_cache.json                     │  2 (w)  │ Pexels search result cache (24h TTL)
+state/logs/{agent}_{YYYYMMDD}.log          │  2 (w)  │ Per-agent rotating logs (5MB max, 7-day retention)
+state/.locks/{filename}.lock               │  2 (w)  │ filelock lock files for atomic state writes
+state/schema/*.schema.json                 │  2 (w)  │ JSON Schema files for state file validation
+───────────────────────────────────────────┼─────────┼─────────────────────────────────────────────────
+ASSET FILES (generated at runtime, cached in assets/ branch cache)
+───────────────────────────────────────────┼─────────┼─────────────────────────────────────────────────
+assets/images/raw/{post_id}.jpg            │    4    │ Raw image from provider (before QA)
+assets/images/approved/{post_id}.jpg       │    4    │ Image that passed QA (before text overlay)
+assets/images/final/{post_id}.jpg          │    4    │ Publish-ready image (after text overlay)
+assets/images/final/{reel_id}_thumb.jpg    │    4    │ Reel thumbnail frame
+assets/videos/final/{reel_id}.mp4          │    4    │ Publish-ready assembled reel
+assets/videos/clips/{reel_id}_seg{N}.mp4   │    4    │ Per-segment clips (temp — deleted after export)
+assets/audio/temp/{reel_id}_seg{N}.mp3     │    4    │ Per-segment TTS (temp — deleted after export)
+assets/audio/{mood}/                       │    2    │ Background music by mood category
+assets/audio/manifest.json                 │    2    │ Cached music manifest (prevents re-download)
+assets/fonts/NotoSans-Bold.ttf             │    2    │ Font for image text overlays
+───────────────────────────────────────────┴─────────┴─────────────────────────────────────────────────
+
+TOTAL SOURCE FILES:  ~35 tracked files (workflows + agents + utils + prompts + config)
+TOTAL RUNTIME FILES: ~30 state + asset files generated automatically
+TOTAL SESSIONS:      6
+STATUS:              ✅ SYSTEM COMPLETE — ready to deploy

@@ -1,0 +1,109 @@
+╔══════════════════════════════════════════════════════════════════╗
+║          FACE — VISUAL QA FAILURE & FALLBACK FLOWCHART           ║
+╚══════════════════════════════════════════════════════════════════╝
+
+  VisualDirectorAgent receives post_id + visual_brief
+                          │
+                          ▼
+            ┌─────────────────────────┐
+            │  ATTEMPT 1              │
+            │  Provider: Pollinations │ ◄── No API key required
+            │  (primary, free)        │
+            └─────────────┬───────────┘
+                          │ image generated
+                          ▼
+               ┌──────────────────────┐
+               │  Quality Gate Check  │ ◄── Gemini vision call
+               │  (image_evaluator)   │     5 criteria scored:
+               │                      │     • subject_clarity
+               │  policy_safe?  ──NO──┼──► SCORE = 0.0 (hard zero)
+               │       │              │     • composition
+               └───────┼──────────────┘     • style_match
+                       │ YES                • text_overlay_space
+                       ▼                    • overall_aesthetics
+               score >= min_score?          Weighted avg → final score
+              (default: 7)
+                  │         │
+                 YES         NO
+                  │         │
+                  ▼         ▼
+          ┌──────────┐  ┌─────────────────────────┐
+          │ ACCEPTED │  │  ATTEMPT 2               │
+          │ Image ✅  │  │  Provider: HF FLUX.1    │ ◄── HF_TOKEN required
+          │ saved to │  │  -schnell (secondary)    │
+          │ images/  │  └─────────────┬───────────┘
+          │ final/   │                │ image generated
+          └──────────┘                ▼
+                            ┌──────────────────────┐
+                            │  Quality Gate Check  │
+                            │  (same 5 criteria)   │
+                            │                      │
+                            │  policy_safe?  ──NO──┼──► SCORE = 0.0
+                            └───────┬──────────────┘
+                                    │ YES
+                                    ▼
+                            score >= min_score?
+                                │         │
+                               YES         NO
+                                │         │
+                                ▼         ▼
+                        ┌──────────┐  ┌─────────────────────────┐
+                        │ ACCEPTED │  │  ATTEMPT 3               │
+                        │ Image ✅  │  │  Provider: HF SD-XL     │ ◄── Same HF_TOKEN
+                        └──────────┘  │  (tertiary)              │
+                                      └─────────────┬───────────┘
+                                                    │ image generated
+                                                    ▼
+                                          ┌──────────────────────┐
+                                          │  Quality Gate Check  │
+                                          │  (same 5 criteria)   │
+                                          │                      │
+                                          │  policy_safe? ──NO───┼──► SCORE = 0.0
+                                          └───────┬──────────────┘
+                                                  │ YES
+                                                  ▼
+                                          score >= min_score?
+                                              │         │
+                                             YES         NO
+                                              │         │
+                                              ▼         ▼
+                                      ┌──────────┐  ┌────────────────────────┐
+                                      │ ACCEPTED │  │  FALLBACK              │
+                                      │ Image ✅  │  │  Provider: Pexels      │ ◄── PEXELS_API_KEY
+                                      └──────────┘  │  (last resort)         │
+                                                     │                        │
+                                                     │  Search: brief's       │
+                                                     │  fallback_pexels_query │
+                                                     │  → pick top result     │
+                                                     └───────────┬────────────┘
+                                                                 │
+                                                                 ▼
+                                                       ┌──────────────────────┐
+                                                       │  Pexels image found? │
+                                                       └──────┬──────────┬────┘
+                                                             YES          NO
+                                                              │           │
+                                                              ▼           ▼
+                                                       ┌──────────┐ ┌──────────────┐
+                                                       │ ACCEPTED │ │  FINAL FAIL  │
+                                                       │ (Pexels) │ │  image_ready │
+                                                       │ ⚠️ Low    │ │  = False     │
+                                                       │ quality  │ │  → skip post │
+                                                       │ warning  │ │  → skipped   │
+                                                       │ logged   │ │  .json entry │
+                                                       └──────────┘ └──────────────┘
+
+ QA LOG — Written to state/qa_log.json after each attempt:
+ ┌──────────────────────────────────────────────────────────────────┐
+ │ { post_id, attempt: 1|2|3, provider, score, policy_safe,        │
+ │   improvement_instructions, timestamp, fallback: bool }         │
+ └──────────────────────────────────────────────────────────────────┘
+
+ FINAL STATE — Written to generated_content.json:
+ ┌──────────────────────────────────────────────────────────────────┐
+ │  image_path:          assets/images/final/{post_id}.jpg          │
+ │  image_provider_used: "Pollinations"|"HF-FLUX"|"HF-SDXL"|       │
+ │                        "pexels"|"none"                           │
+ │  qa_score:            float 0–10                                 │
+ │  image_ready:         true | false                               │
+ └──────────────────────────────────────────────────────────────────┘
