@@ -203,3 +203,6 @@ PEXELS_LIMITER = RateLimiter("pexels", calls_per_minute=3)
 
 # HuggingFace: conservative 50 RPM
 HF_LIMITER = RateLimiter("huggingface", calls_per_minute=50)
+
+# Pixabay: conservative limit for low-volume use.
+PIXABAY_LIMITER = RateLimiter("pixabay", calls_per_minute=3)

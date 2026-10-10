@@ -23,6 +23,7 @@ jobs:
       FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
       PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GITHUB_REPOSITORY: ${{ github.repository }}
 
@@ -126,7 +127,14 @@ jobs:
       # ── Step 14: Run PublisherAgent ───────────────────────────────────────
       # NOTE: publisher.py exits 0 on token expiry — this is intentional.
       - name: Run PublisherAgent
+        if: ${{ vars.ENABLE_FACEBOOK_PUBLISHING == 'true' }}
+        env:
+          ENABLE_FACEBOOK_PUBLISHING: ${{ vars.ENABLE_FACEBOOK_PUBLISHING }}
         run: python agents/publisher.py
+
+      - name: Publisher disabled - safe mode
+        if: ${{ vars.ENABLE_FACEBOOK_PUBLISHING != 'true' }}
+        run: echo "SAFE MODE: Publisher skipped; no Facebook post was attempted.
 
       # ── Step 15: Commit state back to state branch ────────────────────────
       - name: Commit state back to state branch

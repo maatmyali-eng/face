@@ -24,7 +24,7 @@ imageio-ffmpeg==0.5.1
 edge-tts==6.1.12
 
 # ─── Stock Media ─────────────────────────────────────────────────────────────
-pexels-python==1.0.6
+# Pexels integration: official REST API via requests in utils/asset_cache.py
 
 # ─── Audio / Video Downloading ───────────────────────────────────────────────
 yt-dlp==2024.10.7
@@ -57,7 +57,7 @@ asyncio-throttle==1.0.2
 colorlog==6.8.2
 
 # ─── Type Hints ──────────────────────────────────────────────────────────────
-typing-extensions==4.12.2
+typing-extensions>=4.14.0,<5.0.0
 
 # ─── NumPy (required by moviepy and colormath) ───────────────────────────────
 numpy==1.26.4

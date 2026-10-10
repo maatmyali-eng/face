@@ -158,7 +158,23 @@ def _generate_segment_image(prompt: str, reel_id: str, seg_idx: int) -> Path | N
         log.info("Segment image via HF SDXL: %s", output_path)
         return output_path
 
-    # Provider 4: Pexels
+        # Provider 4: Pixabay stock photo.
+    if os.environ.get("PIXABAY_API_KEY", "").strip():
+        try:
+            cache = get_asset_cache()
+            path = cache.download_pixabay_photo(
+                query=prompt[:100],
+                orientation="portrait",
+            )
+            shutil.copy2(path, output_path)
+            log.info("Segment image via Pixabay: %s", output_path)
+            return output_path
+        except Exception as exc:
+            log.warning("[Seg-Pixabay] Failed: %s", exc)
+
+    # The existing Pexels fallback follows here as Provider 5.
+
+    # Provider 5: Pexels
     PEXELS_LIMITER.acquire()
     try:
         cache = get_asset_cache()
@@ -268,6 +284,28 @@ def _gather_segment_asset(
             )
         except Exception as exc:
             log_exception(log, f"Stock video download failed seg {seg_idx}", exc)
+
+                # Alternative stock-video provider.
+        if os.environ.get("PIXABAY_API_KEY", "").strip():
+            try:
+                cache = get_asset_cache()
+                clip_path = cache.download_pixabay_video(
+                    query=query,
+                    orientation="portrait",
+                )
+                log.info(
+                    "Pixabay stock video downloaded: %s",
+                    clip_path,
+                )
+                segment["_asset_path"] = str(clip_path)
+                return str(clip_path)
+            except Exception as exc:
+                log_exception(
+                    log,
+                    f"Pixabay stock video failed for segment {seg_idx}",
+                    exc,
+                )
+
         # Fallback: generate image instead
         log.info("Falling back to generated image for seg %d", seg_idx)
         prompt = segment.get("stock_video_search_query", config.get("niche", "scenic"))
