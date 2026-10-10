@@ -1,0 +1,232 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# FACE — Facebook Autonomous Content Engine
+# Configuration File — Edit once, never touch again.
+# All values here are injected into every agent and prompt automatically.
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ───────────────────────────────────────────────────────────────────────────
+# PAGE IDENTITY
+# ───────────────────────────────────────────────────────────────────────────
+
+# The display name of your Facebook Page (used in captions and reel CTAs)
+page_name: "My Awesome Page"
+
+# Primary niche — the single overarching content category.
+# Examples: "travel", "tech", "food", "motivation", "education",
+#           "lifestyle", "finance", "fitness", "parenting", "beauty"
+niche: "travel"
+
+# Sub-niches — specific angles within your niche (2-4 recommended).
+# These are used by TrendHunterAgent to filter relevant trends.
+# Examples for travel: ["budget travel", "Southeast Asia backpacking"]
+# Examples for tech:   ["AI tools", "smartphone reviews", "coding tips"]
+sub_niches:
+  - "budget travel"
+  - "Southeast Asia"
+  - "hidden gems"
+
+# ───────────────────────────────────────────────────────────────────────────
+# AUDIENCE DEFINITION
+# ───────────────────────────────────────────────────────────────────────────
+
+# Primary geographic target for content cultural relevance.
+# This directly affects image generation, cultural cues, and language style.
+# Examples: "Bangladesh", "South Asia", "Nigeria", "Philippines", "Global"
+target_region: "Bangladesh"
+
+# Content language.
+# Options: "English", "Bangla", "Bilingual (English + Bangla)",
+#          "Hindi", "Tagalog", "Arabic", "French", "Spanish"
+# For "Bilingual": English captions with Bangla sub-text in images/reels.
+target_language: "Bilingual (English + Bangla)"
+
+# Age range of your primary audience — used to tune content tone and
+# cultural references. Format: "18-24", "25-34", "18-35", "35-50"
+audience_age_range: "18-30"
+
+# ───────────────────────────────────────────────────────────────────────────
+# POSTING SCHEDULE
+# ───────────────────────────────────────────────────────────────────────────
+
+posting_schedule:
+  # Number of feed posts per day (recommended: 2-4)
+  posts_per_day: 3
+
+  # Number of Stories per day (recommended: 1-3)
+  stories_per_day: 2
+
+  # Number of Reel scripts to produce per week (recommended: 2-5)
+  # Note: Reels are compute-heavy (~8 min each on GitHub Actions).
+  # 3/week = ~24 min/week on reel pipeline — well within free tier.
+  reels_per_week: 3
+
+# ───────────────────────────────────────────────────────────────────────────
+# CONTENT STYLE
+# ───────────────────────────────────────────────────────────────────────────
+
+# The voice and personality of all written content.
+# Options: "inspirational", "humorous", "educational", "conversational",
+#          "authoritative", "playful", "motivational", "documentary"
+tone: "inspirational"
+
+# Content pillars — the 3-5 themes your page rotates through.
+# ContentStrategyAgent ensures no pillar repeats consecutively.
+# Recommended: 4-5 pillars for variety.
+content_pillars:
+  - "Travel Inspiration"        # Aspirational destination content
+  - "Budget Travel Tips"        # Practical money-saving advice
+  - "Hidden Gems"               # Lesser-known spots discovery
+  - "Cultural Experiences"      # Local food, people, traditions
+  - "Travel Stories"            # Personal narrative / community UGC style
+
+# ───────────────────────────────────────────────────────────────────────────
+# VISUAL SETTINGS
+# ───────────────────────────────────────────────────────────────────────────
+
+visual:
+  # Primary visual aesthetic preference.
+  # Options: "photorealistic", "cinematic", "digital_art",
+  #          "flat_illustration", "bold_typographic", "documentary_photo"
+  # Note: VisualDirectorAgent may override this per-post based on content type.
+  preferred_style: "cinematic"
+
+  # Overall color mood for the page's visual identity.
+  # Options: "warm" (oranges, golds), "cool" (blues, greens),
+  #          "vibrant" (high saturation), "muted" (desaturated, film-grain),
+  #          "dark" (deep tones, dramatic), "pastel" (soft, light)
+  color_mood: "warm"
+
+  # Whether to include regional cultural visual elements in images.
+  # Strongly recommended: true — makes content feel local and authentic.
+  use_regional_visual_cues: true
+
+  # Whether to burn subtitles into reels.
+  burn_subtitles: true
+
+  # Text overlay font weight for image hooks.
+  # Options: "bold", "regular", "light"
+  overlay_font_weight: "bold"
+
+# ───────────────────────────────────────────────────────────────────────────
+# AGENT TOGGLES
+# ───────────────────────────────────────────────────────────────────────────
+
+agents:
+  # Enable Reel production (Agent 8). Disable to save GitHub Actions minutes.
+  enable_reels: true
+
+  # Enable Story generation and posting (part of Agent 3 + 5).
+  enable_stories: true
+
+  # Enable weekly self-improvement (Agent 7).
+  enable_self_improvement: true
+
+  # Enable monthly algorithm watching (Agent 6).
+  enable_algorithm_watcher: true
+
+  # Enable image quality gate (QA scoring before posting).
+  # If false, all generated images are used without scoring.
+  enable_image_qa: true
+
+  # Enable pre-publish content safety check via Gemini.
+  enable_safety_check: true
+
+# ───────────────────────────────────────────────────────────────────────────
+# API SETTINGS
+# ───────────────────────────────────────────────────────────────────────────
+
+api:
+  # Gemini model to use. Free tier model — do not change unless you have
+  # a paid plan. gemini-1.5-flash: 15 RPM, 1M TPM, 1500 req/day (free).
+  gemini_model: "gemini-3.5-flash-lite"
+
+  # Maximum retry attempts for any API call that fails or rate-limits.
+  max_retries: 3
+
+  # Base delay (seconds) between retries. Actual delay uses exponential
+  # backoff: delay = retry_delay_seconds * (2 ^ attempt_number)
+  # Attempt 1: 5s, Attempt 2: 10s, Attempt 3: 20s
+  retry_delay_seconds: 5
+
+  # Gemini free tier: 15 requests per minute.
+  # The rate limiter will auto-space calls to stay under this.
+  gemini_rpm_limit: 12
+
+  # Hugging Face Inference API: 1,000 requests/day free.
+  # Agent 4 uses this for FLUX.1-schnell image generation.
+  huggingface_daily_limit: 1000
+
+  # Pexels API: 200 requests/hour, 20,000/month free.
+  pexels_hourly_limit: 200
+
+  # Facebook Graph API: 200 calls/hour per page token.
+  facebook_hourly_limit: 200
+
+# ───────────────────────────────────────────────────────────────────────────
+# QUALITY GATE SETTINGS
+# ───────────────────────────────────────────────────────────────────────────
+
+quality_gate:
+  # Minimum overall Gemini Vision score (0-10) for an image to be approved.
+  # Images scoring below this trigger regeneration. Recommended: 7.
+  min_image_score: 7
+
+  # Maximum number of regeneration attempts before falling back to Pexels.
+  # Attempt 1: same prompt, new seed
+  # Attempt 2: switch provider
+  # Attempt 3: simplified prompt + switch provider
+  # Attempt 4: Pexels stock photo fallback
+  max_regeneration_attempts: 3
+
+  # Minimum content safety score (0-10) for a caption to be published.
+  # Captions scoring below this are rewritten once before being discarded.
+  min_safety_score: 8
+
+# ───────────────────────────────────────────────────────────────────────────
+# SCHEDULE SETTINGS
+# ───────────────────────────────────────────────────────────────────────────
+
+schedule:
+  # Your local timezone (used for reporting and logging).
+  # See: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+  # GitHub Actions runs in UTC — daily_pipeline.yml cron times are UTC.
+  timezone: "Asia/Dhaka"
+
+  # UTC times when the daily pipeline runs.
+  # These must match the cron schedule in daily_pipeline.yml.
+  # Default: 04:00, 11:00, 17:00 UTC = 10:00, 17:00, 23:00 BST (+6)
+  daily_run_times_utc:
+    - "04:00"
+    - "11:00"
+    - "17:00"
+
+  # Which post slot gets which content type on each run.
+  # Slot 1 (04:00 UTC): morning post — highest organic reach window
+  # Slot 2 (11:00 UTC): midday post — engagement peak
+  # Slot 3 (17:00 UTC): evening post — shares peak
+  run_slots:
+    - slot: 1
+      content_types: ["image_post", "story"]
+    - slot: 2
+      content_types: ["reel"]
+    - slot: 3
+      content_types: ["image_post", "story"]
+
+# ───────────────────────────────────────────────────────────────────────────
+# SELF-IMPROVEMENT SETTINGS
+# ───────────────────────────────────────────────────────────────────────────
+
+self_improvement:
+  # Number of weeks to run on baseline before first improvement cycle.
+  # Recommended: 4 (need enough data for meaningful analysis).
+  baseline_weeks: 4
+
+  # Number of consecutive underperforming weeks before auto-rollback.
+  rollback_threshold_weeks: 2
+
+  # Minimum posts in history before improvement agent runs analysis.
+  min_posts_for_analysis: 20
+
+  # Performance metric used to judge prompt quality.
+  # Options: "reach", "engagement_rate", "reactions", "shares", "clicks"
+  optimization_metric: "engagement_rate"

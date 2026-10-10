@@ -1,0 +1,66 @@
+# FACE — Facebook Autonomous Content Engine
+# Python Dependencies — Pinned for Reproducibility
+# Python 3.11+ required
+# Install: pip install -r requirements.txt
+
+# ─── Google Gemini API ───────────────────────────────────────────────────────
+google-genai==2.29.0
+
+# ─── HTTP Requests ───────────────────────────────────────────────────────────
+requests==2.32.3
+aiohttp==3.10.5
+aiofiles==24.1.0
+
+# ─── Image Processing ────────────────────────────────────────────────────────
+Pillow==10.4.0
+colormath==3.0.0
+
+# ─── Video Processing ────────────────────────────────────────────────────────
+moviepy==1.0.3
+imageio==2.35.1
+imageio-ffmpeg==0.5.1
+
+# ─── Text-to-Speech ──────────────────────────────────────────────────────────
+edge-tts==6.1.12
+
+# ─── Stock Media ─────────────────────────────────────────────────────────────
+pexels-python==1.0.6
+
+# ─── Audio / Video Downloading ───────────────────────────────────────────────
+yt-dlp==2024.10.7
+
+# ─── Config Parsing ──────────────────────────────────────────────────────────
+PyYAML==6.0.2
+
+# ─── File Locking (prevent race conditions on state files) ───────────────────
+filelock==3.16.1
+
+# ─── RSS Parsing (TrendHunterAgent) ──────────────────────────────────────────
+feedparser==6.0.11
+
+# ─── JSON Schema Validation ──────────────────────────────────────────────────
+jsonschema==4.23.0
+
+# ─── Date/Time Utilities ─────────────────────────────────────────────────────
+python-dateutil==2.9.0.post0
+
+# ─── Retry Logic ─────────────────────────────────────────────────────────────
+tenacity==9.0.0
+
+# ─── Environment Variables (local dev only — GitHub Actions uses Secrets) ────
+python-dotenv==1.0.1
+
+# ─── Async Support ───────────────────────────────────────────────────────────
+asyncio-throttle==1.0.2
+
+# ─── Logging Utilities ───────────────────────────────────────────────────────
+colorlog==6.8.2
+
+# ─── Type Hints ──────────────────────────────────────────────────────────────
+typing-extensions==4.12.2
+
+# ─── NumPy (required by moviepy and colormath) ───────────────────────────────
+numpy==1.26.4
+
+# ─── Pillow dependency for font handling ─────────────────────────────────────
+fonttools==4.53.1
