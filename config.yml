@@ -53,12 +53,12 @@ posting_schedule:
   posts_per_day: 3
 
   # Number of Stories per day (recommended: 1-3)
-  stories_per_day: 2
+  stories_per_day: 0
 
   # Number of Reel scripts to produce per week (recommended: 2-5)
   # Note: Reels are compute-heavy (~8 min each on GitHub Actions).
   # 3/week = ~24 min/week on reel pipeline — well within free tier.
-  reels_per_week: 3
+  reels_per_week: 0
 
 # ───────────────────────────────────────────────────────────────────────────
 # CONTENT STYLE
@@ -113,10 +113,10 @@ visual:
 
 agents:
   # Enable Reel production (Agent 8). Disable to save GitHub Actions minutes.
-  enable_reels: true
+  enable_reels: false
 
   # Enable Story generation and posting (part of Agent 3 + 5).
-  enable_stories: true
+  enable_stories: false
 
   # Enable weekly self-improvement (Agent 7).
   enable_self_improvement: true
@@ -136,8 +136,7 @@ agents:
 # ───────────────────────────────────────────────────────────────────────────
 
 api:
-  # Gemini model to use. Free tier model — do not change unless you have
-  # a paid plan. gemini-1.5-flash: 15 RPM, 1M TPM, 1500 req/day (free).
+  # Current low-cost Gemini API model; verify quota on the API project dashboard.
   gemini_model: "gemini-3.5-flash-lite"
 
   # Maximum retry attempts for any API call that fails or rate-limits.
@@ -194,16 +193,15 @@ schedule:
 
   # UTC times when the daily pipeline runs.
   # These must match the cron schedule in daily_pipeline.yml.
-  # Default: 04:00, 11:00, 17:00 UTC = 10:00, 17:00, 23:00 BST (+6)
+  # Must match daily_pipeline.yml: 03:00, 07:00, 14:00 UTC = 09:00, 13:00, 20:00 Bangladesh time.
   daily_run_times_utc:
-    - "04:00"
-    - "11:00"
-    - "17:00"
+    - "03:00"
+    - "07:00"
+    - "14:00"
 
-  # Which post slot gets which content type on each run.
-  # Slot 1 (04:00 UTC): morning post — highest organic reach window
-  # Slot 2 (11:00 UTC): midday post — engagement peak
-  # Slot 3 (17:00 UTC): evening post — shares peak
+  # Each slot produces one feed post. Reels/Stories stay disabled until their
+  # publishing paths are validated against the current Meta API.
+  # Slot 1 (03:00 UTC): morning; Slot 2 (07:00 UTC): midday; Slot 3 (14:00 UTC): evening
   run_slots:
     - slot: 1
       content_types: ["image_post", "story"]
