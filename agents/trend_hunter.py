@@ -372,7 +372,7 @@ def fetch_nitter(niche: str) -> list[dict]:
 
 def _fetch_all_sources_parallel(cfg: dict) -> list[dict]:
     """
-    Fetch all 4 trend sources concurrently using a thread pool.
+    Fetch all 4 configured sources concurrently using a thread pool.
     Individual source failures are caught and logged — pipeline continues.
     """
     country_code = _country_code(cfg)
@@ -402,6 +402,52 @@ def _fetch_all_sources_parallel(cfg: dict) -> list[dict]:
                 log_exception(log, exc, f"Source {name} raised unexpected error")
 
     return all_trends
+
+def _build_evergreen_fallback(cfg: dict) -> list[dict]:
+    """
+    Return niche-specific evergreen ideas when every external trend source fails.
+
+    These are explicitly marked as fallback topics, not live trends. This keeps
+    the pipeline productive without fabricating current popularity or metrics.
+    """
+    niche = str(cfg.get("niche", "general")).strip() or "general"
+    region = str(cfg.get("target_region", "global")).strip() or "global"
+    sub_niches = cfg.get("sub_niches", [])
+    sub_niche = str(sub_niches[0]).strip() if isinstance(sub_niches, list) and sub_niches else niche
+
+    if niche.lower() == "travel":
+        topics = [
+            f"Budget-friendly travel ideas in {region}",
+            f"Hidden-gem destinations and local experiences in {region}",
+            f"Travel-planning mistakes to avoid when visiting {region}",
+            f"Practical tips for first-time travelers in {region}",
+            f"How to plan a memorable trip in {region on a realistic budget".replace("{region ", "{region "),
+        ]
+    else:
+        topics = [
+            f"Beginner-friendly {niche} tips for people in {region}",
+            f"Common {niche} mistakes and how to avoid them",
+            f"Budget-friendly {niche} ideas for people in {region}",
+            f"Practical questions people ask about {niche}",
+            f"How to get started with {sub_niche} in {region}",
+        ]
+
+    now = datetime.now(timezone.utc).isoformat()
+    return [
+        {
+            "topic": topic,
+            "source": "evergreen_fallback",
+            "raw_score": 3.0,
+            "raw_data": {
+                "fallback": True,
+                "not_a_live_trend": True,
+                "evidence": "No configured public trend source returned usable items in this run.",
+                "generated_at": now,
+            },
+        }
+        for topic in topics
+    ]
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Gemini scoring
@@ -484,14 +530,12 @@ def main() -> None:
     log.info("Total raw items collected: %d", len(raw_trends))
 
     if not raw_trends:
-        log.error("All trend sources returned zero items — writing empty trends file")
-        write_state("trends.json", {
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-            "region": region,
-            "niche": niche,
-            "trends": [],
-        })
-        raise SystemExit(1)
+        log.warning(
+            "All public trend sources failed; using clearly labelled evergreen topics "
+            "instead of pretending we have live trend data."
+        )
+        raw_trends = _build_evergreen_fallback(cfg)
+        log.info("Built %d evergreen fallback topics", len(raw_trends))
 
     # ── Step 2: Deduplicate ─────────────────────────────────────────────────
     log.info("Step 2/4 — Deduplicating %d items", len(raw_trends))
