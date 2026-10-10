@@ -1,0 +1,129 @@
+name: FACE Weekly Self-Improver
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'  # 3 AM UTC every Sunday
+  workflow_dispatch: {}   # Manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  run-improver:
+    name: Run SelfImprovementAgent
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
+      FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+
+    steps:
+      # ── Step 1: Checkout repository ──────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── Step 2: Set up Python 3.11 ────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # ── Step 3: Cache pip packages ────────────────────────────────────────
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            pip-
+
+      # ── Step 4: Install system dependencies ──────────────────────────────
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            libsm6 \
+            libxext6 \
+            libfontconfig1 \
+            libglib2.0-0
+
+      # ── Step 5: Install Python dependencies ──────────────────────────────
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      # ── Step 6: Cache FACE assets ─────────────────────────────────────────
+      - name: Cache FACE assets
+        uses: actions/cache@v4
+        with:
+          path: assets/
+          key: face-assets-${{ hashFiles('config.yml') }}
+          restore-keys: |
+            face-assets-
+
+      # ── Step 7: Restore state from state branch ───────────────────────────
+      - name: Restore state from state branch
+        run: |
+          git fetch origin state:state 2>/dev/null || true
+          git checkout state -- state/ 2>/dev/null || mkdir -p state
+          mkdir -p state/logs state/.locks state/prompt_versions state/schema
+          echo "State restored."
+
+      # ── Step 8: Verify prompts directory exists ───────────────────────────
+      # prompts/ lives on main — already checked out in step 1
+      - name: Verify prompts directory
+        run: |
+          if [ ! -d "prompts" ]; then
+            echo "ERROR: prompts/ directory not found on main branch."
+            exit 1
+          fi
+          echo "Prompts directory verified. Files:"
+          ls prompts/
+
+      # ── Step 9: Run SelfImprovementAgent ─────────────────────────────────
+      - name: Run SelfImprovementAgent
+        run: python agents/self_improver.py
+
+      # ── Step 10: Commit state changes ─────────────────────────────────────
+      - name: Commit state changes to state branch
+        run: |
+          git config user.name "FACE Bot"
+          git config user.email "face-bot@github-actions"
+          git add state/performance_report.json \
+                  state/improvement_log.json \
+                  state/visual_style.json \
+                  state/best_practices.json \
+                  state/prompt_versions/ \
+                  state/logs/ 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "No state changes from self-improver."
+          else
+            git commit -m "state: $(date -u +%Y-%m-%d) weekly performance analysis"
+            git push origin HEAD:state
+            echo "Self-improver state committed."
+          fi
+
+      # ── Step 11: Commit rewritten prompts to main branch ─────────────────
+      - name: Commit rewritten prompts to main
+        run: |
+          git config user.name "FACE Bot"
+          git config user.email "face-bot@github-actions"
+          git add prompts/
+          if git diff --staged --quiet; then
+            echo "No prompt rewrites this week."
+          else
+            CHANGED=$(git diff --staged --name-only | tr '\n' ' ')
+            git commit -m "prompts: weekly self-improvement update — ${CHANGED}"
+            git push origin HEAD:main
+            echo "Rewritten prompts committed to main."
+          fi
+
+      # ── Step 12: Cleanup ──────────────────────────────────────────────────
+      - name: Cleanup
+        if: always()
+        run: echo "Weekly improver complete."

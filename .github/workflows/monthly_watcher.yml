@@ -1,0 +1,100 @@
+name: FACE Monthly Algorithm Watcher
+
+on:
+  schedule:
+    - cron: '0 2 1 * *'  # 2 AM UTC on 1st of every month
+  workflow_dispatch: {}   # Manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  run-watcher:
+    name: Run AlgorithmWatcherAgent
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+
+    steps:
+      # ── Step 1: Checkout repository ──────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── Step 2: Set up Python 3.11 ────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # ── Step 3: Cache pip packages ────────────────────────────────────────
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            pip-
+
+      # ── Step 4: Install system dependencies ──────────────────────────────
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            libsm6 \
+            libxext6 \
+            libfontconfig1 \
+            libglib2.0-0
+
+      # ── Step 5: Install Python dependencies ──────────────────────────────
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      # ── Step 6: Cache FACE assets ─────────────────────────────────────────
+      - name: Cache FACE assets
+        uses: actions/cache@v4
+        with:
+          path: assets/
+          key: face-assets-${{ hashFiles('config.yml') }}
+          restore-keys: |
+            face-assets-
+
+      # ── Step 7: Restore state from state branch ───────────────────────────
+      - name: Restore state from state branch
+        run: |
+          git fetch origin state:state 2>/dev/null || true
+          git checkout state -- state/ 2>/dev/null || mkdir -p state
+          mkdir -p state/logs state/.locks state/schema
+          echo "State restored."
+
+      # ── Step 8: Run AlgorithmWatcherAgent ────────────────────────────────
+      # Safe to re-run — idempotent, falls back to defaults on Gemini failure
+      - name: Run AlgorithmWatcherAgent
+        run: python agents/algorithm_watcher.py
+
+      # ── Step 9: Commit updated algorithm state ────────────────────────────
+      - name: Commit updated algorithm state
+        run: |
+          git config user.name "FACE Bot"
+          git config user.email "face-bot@github-actions"
+          git add state/algorithm_rules.json \
+                  state/visual_style.json \
+                  state/best_practices.json \
+                  state/logs/ 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "No algorithm state changes to commit."
+          else
+            git commit -m "state: $(date -u +%Y-%m-%d) monthly algorithm update"
+            git push origin HEAD:state
+            echo "Algorithm state committed."
+          fi
+
+      # ── Step 10: Cleanup ──────────────────────────────────────────────────
+      - name: Cleanup
+        if: always()
+        run: echo "Monthly watcher complete."

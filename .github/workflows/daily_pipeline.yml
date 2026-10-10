@@ -1,0 +1,154 @@
+name: FACE Daily Pipeline
+
+on:
+  schedule:
+    - cron: '0 3 * * *'   # 9 AM Bangladesh time (UTC+6) = 03:00 UTC
+    - cron: '0 7 * * *'   # 1 PM Bangladesh time = 07:00 UTC
+    - cron: '0 14 * * *'  # 8 PM Bangladesh time = 14:00 UTC
+  workflow_dispatch: {}    # Manual trigger for testing
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  run-pipeline:
+    name: Run FACE Pipeline
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
+      FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+
+    steps:
+      # ── Step 1: Checkout repository ──────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── Step 2: Set up Python 3.11 ────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # ── Step 3: Cache pip packages ────────────────────────────────────────
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            pip-
+
+      # ── Step 4: Install system dependencies ──────────────────────────────
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            ffmpeg \
+            libsm6 \
+            libxext6 \
+            libfontconfig1 \
+            libglib2.0-0 \
+            libgl1-mesa-glx \
+            fonts-noto \
+            fonts-noto-extra
+
+      # ── Step 5: Install Python dependencies ──────────────────────────────
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      # ── Step 6: Cache FACE assets (fonts, audio — never re-download) ─────
+      - name: Cache FACE assets
+        uses: actions/cache@v4
+        with:
+          path: assets/
+          key: face-assets-${{ hashFiles('config.yml') }}
+          restore-keys: |
+            face-assets-
+
+      # ── Step 7: Restore state from state branch ───────────────────────────
+      - name: Restore state from state branch
+        run: |
+          git fetch origin state:state 2>/dev/null || true
+          git checkout state -- state/ 2>/dev/null || mkdir -p state
+          mkdir -p state/logs state/.locks state/prompt_versions \
+                   state/pexels_cache state/schema
+          echo "State restored or initialized."
+
+      # ── Step 8: Run TrendHunterAgent ─────────────────────────────────────
+      - name: Run TrendHunterAgent
+        run: python agents/trend_hunter.py
+
+      # ── Step 9: Run ContentStrategyAgent ─────────────────────────────────
+      - name: Run ContentStrategyAgent
+        run: python agents/content_strategy.py
+
+      # ── Step 10: Run ContentGeneratorAgent ───────────────────────────────
+      - name: Run ContentGeneratorAgent
+        run: python agents/content_generator.py
+
+      # ── Step 11: Run VisualDirectorAgent ─────────────────────────────────
+      - name: Run VisualDirectorAgent
+        run: python agents/visual_director.py
+
+      # ── Step 12: Check if reels are scheduled today ───────────────────────
+      - name: Check if reels are scheduled today
+        id: check-reels
+        run: |
+          python - <<'EOF'
+          import json, os, sys
+          try:
+              with open('state/content_plan.json') as f:
+                  plan = json.load(f)
+              reels = [r for r in plan.get('reels', []) if r]
+              result = 'true' if reels else 'false'
+          except (FileNotFoundError, json.JSONDecodeError, KeyError):
+              result = 'false'
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write(f'HAS_REELS={result}\n')
+          print(f'HAS_REELS={result}')
+          EOF
+
+      # ── Step 13: Run ReelProducerAgent (only if reels exist) ──────────────
+      - name: Run ReelProducerAgent
+        if: env.HAS_REELS == 'true'
+        run: python agents/reel_producer.py
+
+      # ── Step 14: Run PublisherAgent ───────────────────────────────────────
+      # NOTE: publisher.py exits 0 on token expiry — this is intentional.
+      - name: Run PublisherAgent
+        run: python agents/publisher.py
+
+      # ── Step 15: Commit state back to state branch ────────────────────────
+      - name: Commit state back to state branch
+        run: |
+          git config user.name "FACE Bot"
+          git config user.email "face-bot@github-actions"
+          git add state/
+          git add state/logs/ 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "No state changes to commit."
+          else
+            git commit -m "state: $(date -u +%Y-%m-%d_%H:%M) daily pipeline"
+            git push origin HEAD:state
+            echo "State committed and pushed to state branch."
+          fi
+
+      # ── Step 16: Clean up large temp files ───────────────────────────────
+      - name: Clean up temp files
+        if: always()
+        run: |
+          rm -rf assets/videos/clips/temp_* 2>/dev/null || true
+          rm -rf assets/audio/temp/ 2>/dev/null || true
+          find assets/images/raw -name "*.jpg" -delete 2>/dev/null || true
+          find assets/images/approved -name "*.jpg" -delete 2>/dev/null || true
+          echo "Cleanup complete."
