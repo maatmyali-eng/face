@@ -190,7 +190,7 @@ jobs:
             echo "No persistent state changes to commit."
           else
             git commit -m "state: $(date -u +%Y-%m-%d_%H:%M) daily pipeline [skip ci]"
-            git push origin HEAD:state
+            git push origin HEAD:refs/heads/state
             echo "Persistent state committed to state branch."
           fi
 
