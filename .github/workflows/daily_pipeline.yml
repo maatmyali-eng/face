@@ -137,7 +137,6 @@ jobs:
         run: |
           echo "SAFE MODE: Publisher skipped; no Facebook post was attempted."
 
-      # ── Step 15: Commit state back to state branch ────────────────────────
       - name: Commit state back to state branch
         run: |
           git config user.name "FACE Bot"
